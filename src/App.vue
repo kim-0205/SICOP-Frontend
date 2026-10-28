@@ -1,11 +1,37 @@
-<script setup lang="ts"></script>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { apiGet } from './services/api'
+
+// Resultado de nuestra prueba.
+const resultado = ref('Sin probar')
+
+// Consultar proveedores desde el Backend.
+async function probarConexion() {
+  resultado.value = 'Conectando con SICOP...'
+
+  try {
+    const proveedores = await apiGet<unknown[]>('/api/Proveedores')
+
+    resultado.value =
+      `Conexión exitosa. Proveedores encontrados: ${proveedores.length}`
+  } catch (error) {
+    console.error('Error de conexión:', error)
+
+    resultado.value =
+      error instanceof Error ? error.message : 'Error desconocido'
+  }
+}
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
-</template>
+  <main>
+    <h1>SICOP - Prueba de conexión</h1>
 
-<style scoped></style>
+    <button @click="probarConexion">
+      Probar conexión con Backend
+    </button>
+
+    <p>{{ resultado }}</p>
+  </main>
+</template>
