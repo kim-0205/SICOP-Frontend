@@ -1,0 +1,21 @@
+
+# Dependencias instaladas localmente
+node_modules
+
+# Archivos compilados
+dist
+
+# Repositorio Git
+.git
+.github
+
+# Configuración del editor
+.vscode
+
+# Archivos temporales
+*.log
+coverage
+
+# Configuraciones locales privadas
+.env.local
+.env.*.local
