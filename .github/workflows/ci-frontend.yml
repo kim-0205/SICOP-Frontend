@@ -1,0 +1,39 @@
+
+# Integración continua de SICOP Frontend
+name: CI - SICOP Frontend
+
+# Verificar cambios en develop y main
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  build:
+    name: Compilar Vue y TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      # Descargar nuestro proyecto
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      # Preparar Node.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Instalar dependencias
+      - name: Instalar paquetes
+        run: npm ci
+
+      # Comprobar que el frontend compile
+      - name: Compilar proyecto
+        run: npm run build
