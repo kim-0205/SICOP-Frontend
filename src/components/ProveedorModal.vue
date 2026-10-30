@@ -218,25 +218,23 @@ function guardarProveedor() {
               ></textarea>
             </div>
 
-            <!-- Estado -->
-            <div class="form-group full-width">
-              <label for="estado">
-                Estado del proveedor
-              </label>
 
-              <select
-                id="estado"
-                v-model="formulario.activo"
-              >
-                <option :value="true">
-                  Activo
-                </option>
+                <!-- Estado del proveedor -->
+                <div class="form-group full-width">
+                  <label for="estado">
+                    Estado del proveedor
+                  </label>
 
-                <option :value="false">
-                  Inactivo
-                </option>
-              </select>
-            </div>
+                  <!-- Mostrar el estado real sin permitir modificarlo aquí -->
+                  <select
+                    id="estado"
+                    v-model="formulario.activo"
+                    disabled
+                  >
+                    <option :value="true">Activo</option>
+                    <option :value="false">Inactivo</option>
+                  </select>
+                </div>
 
           </div>
         </div>

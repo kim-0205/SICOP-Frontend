@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { apiPost, apiPut } from '@/services/api'
 import FacturaModal from '../../components/FacturaModal.vue'
+
+// Obtener el rol del usuario autenticado.
+const usuarioGuardado = sessionStorage.getItem('sicop_usuario')
+
+const rolUsuario = usuarioGuardado
+  ? JSON.parse(usuarioGuardado).rolId
+  : null
+
+// Solo el Administrador General puede anular facturas.
+// En SICOP, el Administrador General tiene rolId = 1.
+const esAdministradorGeneral = Number(rolUsuario) === 1
 
 // Datos compartidos con el futuro módulo Pagos.
 // Este almacenamiento es temporal; aún no utiliza el backend.
 import {
   facturas,
   proveedores,
-  guardarFactura as guardarFacturaEnStore,
+  cargarProveedoresFacturas,
+  cargarFacturas,
   formatoMoneda,
   formatoFecha,
   totalFacturas,
@@ -17,6 +30,7 @@ import {
   type FacturaCompra,
   type FacturaFormulario
 } from '../../stores/sicopStore'
+
 
 // Buscar por número de factura o nombre del proveedor.
 const busqueda = ref('')
@@ -28,9 +42,115 @@ const facturasFiltradas = computed(() => {
   )
 })
 
-// Abrir el formulario para crear o editar una factura.
+// Factura seleccionada para anulación.
+const facturaParaAnular = ref<FacturaCompra | null>(null)
+
+// Abrir la confirmación de anulación.
+function confirmarAnulacion(factura: FacturaCompra): void {
+  if (!esAdministradorGeneral || factura.anulada) return
+
+  facturaParaAnular.value = factura
+}
+
+// AQUÍ COMIENZA EL NUEVO CÓDIGO.
+
+// Motivo obligatorio para anular una factura.
+const motivoAnulacion = ref('')
+
+// Indica si se está procesando la anulación.
+const anulandoFactura = ref(false)
+
+// Cerrar la confirmación.
+function cancelarAnulacion(): void {
+  if (anulandoFactura.value) return
+
+  facturaParaAnular.value = null
+  motivoAnulacion.value = ''
+}
+
+// Confirmar la anulación en SQL Server.
+async function anularFactura(): Promise<void> {
+  const factura = facturaParaAnular.value
+  const motivo = motivoAnulacion.value.trim()
+
+  if (!factura || !esAdministradorGeneral || factura.anulada) return
+
+  if (!motivo || motivo.length > 500) {
+    alert('Ingrese un motivo de anulación de máximo 500 caracteres.')
+    return
+  }
+
+  anulandoFactura.value = true
+
+  try {
+    // Enviar el motivo al backend.
+    await apiPut<void>(
+      `/api/FacturasCompras/${factura.facturaCompraId}/anular`,
+      motivo
+    )
+
+    // Actualizar las facturas desde SQL Server.
+    await cargarFacturas()
+
+    // Cerrar la confirmación.
+    facturaParaAnular.value = null
+    motivoAnulacion.value = ''
+
+  } catch (error) {
+    console.error('Error al anular la factura:', error)
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : 'No fue posible anular la factura.'
+    )
+  } finally {
+    anulandoFactura.value = false
+  }
+}
+
+// =============================================
+// CARGAR DATOS REALES DESDE SQL SERVER
+// =============================================
+
+onMounted(async () => {
+  try {
+    // Primero cargar los proveedores reales.
+    await cargarProveedoresFacturas()
+
+    // Después cargar las facturas y sus saldos.
+    await cargarFacturas()
+
+  } catch (error) {
+    console.error('Error al cargar las facturas:', error)
+    alert('No fue posible consultar las facturas desde el servidor.')
+  }
+})
+
+// Solo proveedores activos para registrar facturas nuevas.
+const proveedoresActivos = computed(() =>
+  proveedores.value.filter(proveedor => proveedor.activo)
+)
+
+// Control del formulario de nueva factura.
 const mostrarModal = ref(false)
 const facturaSeleccionada = ref<FacturaFormulario | null>(null)
+
+// ==============================================
+// MODAL DE ERROR AL REGISTRAR FACTURA
+// ==============================================
+
+// Controla la visibilidad del mensaje de error.
+const mostrarModalError = ref(false)
+
+// Mensaje que se mostrará al usuario.
+const mensajeErrorFactura = ref('')
+
+// Cerrar únicamente el mensaje de error.
+function cerrarModalError() {
+  mostrarModalError.value = false
+  mensajeErrorFactura.value = ''
+}
 
 function nuevaFactura() {
   facturaSeleccionada.value = null
@@ -55,29 +175,89 @@ function cerrarModal() {
   facturaSeleccionada.value = null
 }
 
-// Las validaciones y los cálculos de saldos viven en sicopStore.ts.
-// Si hay un error, mantenemos abierto el formulario para corregirlo.
-function guardarFactura(datos: FacturaFormulario) {
-  try {
-    guardarFacturaEnStore(datos)
-    cerrarModal()
-  } catch (error: unknown) {
-    alert(error instanceof Error ? error.message : 'No se pudo guardar la factura.')
-  }
-}
 
-// Estado de la factura según su saldo pendiente.
+ // Registrar una factura real en SQL Server.
+ async function guardarFactura(datos: FacturaFormulario): Promise<void> {
+   try {
+
+     // El backend no permite editar facturas registradas.
+     if (datos.facturaCompraId !== undefined) {
+       alert('Las facturas registradas no pueden editarse.')
+       return
+     }
+
+     // Preparar los datos que recibe CrearFacturaCompraDto.
+     const nuevaFactura = {
+       proveedorId: datos.proveedorId,
+       numeroFactura: datos.numeroFactura.trim(),
+       fechaEmision: datos.fechaEmision,
+       fechaVencimiento: datos.fechaVencimiento,
+       total: datos.total,
+       observaciones: datos.observaciones
+     }
+
+     // Guardar la factura mediante POST.
+     await apiPost<FacturaCompra>(
+       '/api/FacturasCompras',
+       nuevaFactura
+     )
+
+     // Actualizar la tabla y los indicadores desde SQL Server.
+     await cargarFacturas()
+
+     // Cerrar el formulario solamente si todo salió bien.
+     cerrarModal()
+
+   }  catch (error) {
+  console.error('Error al registrar la factura:', error)
+
+  const mensaje = error instanceof Error
+    ? error.message
+    : 'No fue posible registrar la factura.'
+
+  // Mostrar un mensaje claro cuando la factura ya existe.
+  if (mensaje.includes('409')) {
+    mensajeErrorFactura.value =
+      'Ya existe una factura con este número para el proveedor seleccionado. Verifica el número e inténtalo nuevamente.'
+  } else {
+    // Conservar el mensaje original para otros errores.
+    mensajeErrorFactura.value = mensaje
+  }
+
+  mostrarModalError.value = true
+}
+ }
+ 
+
+// Mostrar el estado real de la factura.
 function obtenerEstado(factura: FacturaCompra): string {
+
+  // La anulación tiene prioridad sobre el saldo.
+  if (factura.anulada) return 'Anulada'
+
   if (factura.saldoPendiente <= 0) return 'Pagada'
-  if (factura.saldoPendiente < factura.total) return 'Parcialmente pagada'
+
+  if (factura.saldoPendiente < factura.total) {
+    return 'Parcialmente pagada'
+  }
+
   return 'Pendiente'
 }
 
+// Asignar el estilo correspondiente al estado.
 function claseEstado(factura: FacturaCompra): string {
+
+  if (factura.anulada) return 'cancelled'
+
   if (factura.saldoPendiente <= 0) return 'paid'
-  if (factura.saldoPendiente < factura.total) return 'partial'
+
+  if (factura.saldoPendiente < factura.total) {
+    return 'partial'
+  }
+
   return 'pending'
 }
+
 </script>
 
 <template>
@@ -159,7 +339,20 @@ function claseEstado(factura: FacturaCompra): string {
               <td class="money-cell">{{ formatoMoneda(factura.saldoPendiente) }}</td>
               <td><span class="status-badge" :class="claseEstado(factura)">{{ obtenerEstado(factura) }}</span></td>
               <td>
-                <button type="button" class="btn-edit" @click="editarFactura(factura)">✎ Editar</button>
+                <!-- Solo el administrador puede anular facturas activas. -->
+                <button
+                  v-if="esAdministradorGeneral && !factura.anulada"
+                  type="button"
+                  class="btn-edit"
+                  @click="confirmarAnulacion(factura)"
+                >
+                  ✕ Anular
+                </button>
+
+                <!-- Identificar las facturas que ya fueron anuladas. -->
+                <span v-else-if="factura.anulada">
+                  Anulada
+                </span>
               </td>
             </tr>
             <tr v-if="facturasFiltradas.length === 0">
@@ -178,10 +371,97 @@ function claseEstado(factura: FacturaCompra): string {
     <FacturaModal
       :visible="mostrarModal"
       :factura="facturaSeleccionada"
-      :proveedores="proveedores"
+      :proveedores="proveedoresActivos"
       @cerrar="cerrarModal"
       @guardar="guardarFactura"
     />
+
+    <!-- MODAL PERSONALIZADO DE ERROR AL REGISTRAR FACTURA -->
+<div
+  v-if="mostrarModalError"
+  class="error-factura-overlay"
+  @click.self="cerrarModalError"
+>
+  <section
+    class="error-factura-modal"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="titulo-error-factura"
+    aria-describedby="descripcion-error-factura"
+  >
+    <div class="error-factura-icon">!</div>
+
+    <h2 id="titulo-error-factura">
+      No se pudo registrar la factura
+    </h2>
+
+    <p id="descripcion-error-factura">
+      {{ mensajeErrorFactura }}
+    </p>
+
+    <div class="error-factura-actions">
+      <button
+        type="button"
+        class="error-factura-button"
+        @click="cerrarModalError"
+      >
+        Entendido
+      </button>
+    </div>
+  </section>
+</div>
+    <!-- Confirmación de anulación de factura -->
+<div
+  v-if="facturaParaAnular"
+  class="anulacion-overlay"
+>
+  <div class="anulacion-modal">
+    <h2>Anular factura</h2>
+
+    <p>
+      ¿Deseas anular la factura
+      <strong>{{ facturaParaAnular.numeroFactura }}</strong>?
+    </p>
+
+    <p>
+      Esta operación conservará el registro en el historial.
+      No se permite anular facturas con pagos vigentes.
+    </p>
+
+    <label for="motivo-anulacion">
+      Motivo de anulación
+    </label>
+
+    <textarea
+      id="motivo-anulacion"
+      v-model="motivoAnulacion"
+      maxlength="500"
+      rows="4"
+      placeholder="Escribe el motivo de la anulación..."
+      :disabled="anulandoFactura"
+    ></textarea>
+
+    <div class="anulacion-acciones">
+      <button
+        type="button"
+        class="btn-cancelar-anulacion"
+        :disabled="anulandoFactura"
+        @click="cancelarAnulacion"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="btn-confirmar-anulacion"
+        :disabled="anulandoFactura || !motivoAnulacion.trim()"
+        @click="anularFactura"
+      >
+        {{ anulandoFactura ? 'Anulando...' : 'Confirmar anulación' }}
+      </button>
+    </div>
+  </div>
+</div>
   </main>
 </template>
 
@@ -330,6 +610,12 @@ td {
 .partial { background: #eee9fb; color: #7550a9; }
 .paid { background: #e9f7ee; color: #27834b; }
 
+/* Estado de factura anulada */
+.cancelled {
+  background: #fde8e8;
+  color: #b42318;
+}
+
 /* Botón editar */
 .btn-edit {
   border: 1px solid #e5d9f0;
@@ -363,5 +649,161 @@ td {
 }
 @media (max-width: 480px) {
   .summary-grid { grid-template-columns: 1fr; }
+}
+
+/* Fondo de la ventana de anulación */
+.anulacion-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: rgba(35, 20, 55, 0.55);
+}
+
+/* Ventana de confirmación */
+.anulacion-modal {
+  width: 100%;
+  max-width: 480px;
+  padding: 30px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 15px 45px rgba(35, 20, 55, 0.2);
+}
+
+.anulacion-modal h2 {
+  margin: 0 0 15px;
+  color: #352057;
+}
+
+.anulacion-modal p {
+  color: #716080;
+  line-height: 1.6;
+}
+
+.anulacion-modal label {
+  display: block;
+  margin: 20px 0 10px;
+  color: #493078;
+  font-weight: 600;
+}
+
+.anulacion-modal textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d9c9eb;
+  border-radius: 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.anulacion-modal textarea:focus {
+  outline: 2px solid #9069b6;
+}
+
+.anulacion-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-cancelar-anulacion,
+.btn-confirmar-anulacion {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancelar-anulacion {
+  background: #eee9f5;
+  color: #493078;
+}
+
+.btn-confirmar-anulacion {
+  background: #7950ae;
+  color: white;
+}
+
+.anulacion-acciones button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==============================================
+   MODAL PERSONALIZADO DE ERROR DE FACTURA
+   ============================================== */
+
+.error-factura-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(35, 20, 55, 0.55);
+}
+
+.error-factura-modal {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  padding: 30px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(35, 20, 55, 0.25);
+}
+
+.error-factura-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 18px;
+  border-radius: 15px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.error-factura-modal h2 {
+  margin: 0 0 12px;
+  color: #352057;
+  font-size: 22px;
+}
+
+.error-factura-modal p {
+  color: #716080;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.error-factura-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 25px;
+}
+
+.error-factura-button {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 22px;
+  background: #7950ae;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error-factura-button:hover {
+  background: #633e96;
 }
 </style>
