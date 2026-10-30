@@ -6,6 +6,32 @@ import { useRoute } from 'vue-router'
 // Obtenemos la ruta actual del sistema.
 const route = useRoute()
 
+// Estructura de los datos del usuario autenticado.
+interface UsuarioSesion {
+  usuarioId: number
+  nombre: string
+  correo: string
+  rolId: number
+}
+
+// Recupera los datos guardados durante el login.
+const usuarioSesion = computed<UsuarioSesion | null>(() => {
+  const datos = sessionStorage.getItem('sicop_usuario')
+
+  if (!datos) return null
+
+  try {
+    return JSON.parse(datos) as UsuarioSesion
+  } catch {
+    return null
+  }
+})
+
+// Obtiene la inicial del usuario.
+const inicialUsuario = computed(() =>
+  usuarioSesion.value?.nombre?.charAt(0).toUpperCase() || 'S'
+)
+
 // Identificamos la sección en la que estamos.
 const titulo = computed(() => {
   const titulos: Record<string, string> = {
@@ -54,14 +80,14 @@ const fechaActual = computed(() =>
       <div class="topbar-divider"></div>
 
       <div class="topbar-user">
-        <div class="user-avatar">S</div>
+              <div class="user-avatar">{{ inicialUsuario }}</div>
 
-        <div class="user-info">
-          <strong>SICOP</strong>
-          <span>Sesión de demostración</span>
-        </div>
+              <div class="user-info">
+                <strong>{{ usuarioSesion?.nombre || 'SICOP' }}</strong>
+                <span>{{ usuarioSesion?.correo || '' }}</span>
+              </div>
+            </div>
       </div>
-    </div>
 
   </header>
 </template>

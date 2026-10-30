@@ -1,17 +1,79 @@
 
+
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { apiPost } from '@/services/api'
+
+// Permite navegar después de iniciar sesión.
+const router = useRouter()
 
 // Datos que ingresará el usuario.
 const usuario = ref('')
 const contrasena = ref('')
 const mostrarContrasena = ref(false)
 
-// Función temporal hasta integrar el endpoint de login.
-function iniciarSesion() {
-  // La autenticación JWT se implementará posteriormente.
+// Controla el estado del formulario.
+const cargando = ref(false)
+const error = ref('')
+
+// Estructura que devuelve nuestro backend .NET.
+interface LoginRespuestaDto {
+  token: string
+  expiracion: string
+  usuarioId: number
+  nombre: string
+  correo: string
+  rolId: number
+}
+
+// Autenticación real mediante JWT.
+async function iniciarSesion() {
+  error.value = ''
+  cargando.value = true
+
+  try {
+    // Envía las credenciales al backend.
+    const respuesta = await apiPost<LoginRespuestaDto>(
+      '/api/Auth/login',
+      {
+        correo: usuario.value.trim(),
+        password: contrasena.value,
+      }
+    )
+
+    // Guarda el token durante la sesión del navegador.
+    sessionStorage.setItem('sicop_token', respuesta.token)
+
+    // Guarda la información básica del usuario.
+    sessionStorage.setItem(
+      'sicop_usuario',
+      JSON.stringify({
+        usuarioId: respuesta.usuarioId,
+        nombre: respuesta.nombre,
+        correo: respuesta.correo,
+        rolId: respuesta.rolId,
+      })
+    )
+
+    // Redirige al panel principal.
+    await router.push('/dashboard')
+
+  } catch (e) {
+    // Evita conservar una sesión anterior inválida.
+    sessionStorage.removeItem('sicop_token')
+    sessionStorage.removeItem('sicop_usuario')
+
+    error.value =
+      e instanceof TypeError
+        ? 'No se pudo conectar con el servidor.'
+        : 'No fue posible iniciar sesión. Verifica tus credenciales.'
+  } finally {
+    cargando.value = false
+  }
 }
 </script>
+
 
 <template>
   <main class="login-page">
@@ -104,14 +166,19 @@ function iniciarSesion() {
               </div>
             </div>
 
-            <!-- Se habilitará al integrar la autenticación -->
-            <button
-              type="submit"
-              class="login-button"
-              disabled
-            >
-              Iniciar sesión
-            </button>
+            <!-- Inicia sesión utilizando la autenticación JWT del backend. -->
+                  <button
+                    type="submit"
+                    class="login-button"
+                    :disabled="cargando"
+                  >
+                    {{ cargando ? 'Iniciando sesión...' : 'Iniciar sesión' }}
+                  </button>
+
+                  <!-- Muestra los errores devueltos durante la autenticación. -->
+                  <p v-if="error" role="alert">
+                    {{ error }}
+                  </p>
           </form>
 
           <p class="security-text">

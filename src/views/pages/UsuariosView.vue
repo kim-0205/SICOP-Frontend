@@ -1,6 +1,7 @@
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { apiGet } from '@/services/api'
 import UsuarioModal from '../../components/UsuarioModal.vue'
 
 // ============================================
@@ -44,30 +45,38 @@ const roles = ref<Rol[]>([
   { rolId: 2, nombre: 'Operador' }
 ])
 
-// Usuarios de ejemplo para desarrollar la interfaz.
-const usuarios = ref<Usuario[]>([
-  {
-    usuarioId: 1,
-    nombre: 'Administrador SICOP',
-    correo: 'admin@sicop.com',
-    rolId: 1,
-    activo: true
-  },
-  {
-    usuarioId: 2,
-    nombre: 'Operador SICOP',
-    correo: 'operador@sicop.com',
-    rolId: 2,
-    activo: true
-  },
-  {
-    usuarioId: 3,
-    nombre: 'María López',
-    correo: 'maria@sicop.com',
-    rolId: 2,
-    activo: false
+
+// Usuarios reales obtenidos desde SQL Server.
+const usuarios = ref<Usuario[]>([])
+
+// Estado de la consulta.
+const cargandoUsuarios = ref(false)
+const errorUsuarios = ref('')
+
+// Consultar los usuarios registrados en el backend.
+async function cargarUsuarios(): Promise<void> {
+  cargandoUsuarios.value = true
+  errorUsuarios.value = ''
+
+  try {
+    // El backend devuelve los usuarios sin sus contraseñas.
+    usuarios.value = await apiGet<Usuario[]>('/api/Usuarios')
+
+  } catch (error) {
+    console.error('Error al cargar usuarios:', error)
+
+    errorUsuarios.value =
+      'No fue posible consultar los usuarios del sistema.'
+
+  } finally {
+    cargandoUsuarios.value = false
   }
-])
+}
+
+// Cargar los usuarios al abrir la pantalla.
+onMounted(async () => {
+  await cargarUsuarios()
+})
 
 // ============================================
 // ESTADOS DE LA VISTA
@@ -371,11 +380,22 @@ function cambiarEstado(usuario: Usuario) {
               </td>
             </tr>
 
-            <tr v-if="usuariosFiltrados.length === 0">
+            <tr v-if="!cargandoUsuarios && !errorUsuarios && usuariosFiltrados.length === 0">
               <td colspan="6" class="empty-state">
                 No se encontraron usuarios con esa búsqueda.
               </td>
             </tr>
+            <tr v-if="cargandoUsuarios">
+            <td colspan="6" class="empty-state">
+              Cargando usuarios desde el servidor...
+            </td>
+          </tr>
+
+          <tr v-else-if="errorUsuarios">
+            <td colspan="6" class="empty-state">
+              {{ errorUsuarios }}
+            </td>
+          </tr>
           </tbody>
         </table>
       </div>
