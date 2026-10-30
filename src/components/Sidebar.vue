@@ -1,11 +1,48 @@
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 
 // SICOP - Menú lateral de navegación.
 // Módulos habilitados:
 // Dashboard, Proveedores, Facturas de compra,
 // Pagos y Usuarios.
+
+// Permite navegar hacia el Login.
+const router = useRouter()
+
+// Recupera los datos del usuario autenticado.
+const usuarioSesion = computed(() => {
+  const datos = sessionStorage.getItem('sicop_usuario')
+
+  if (!datos) return null
+
+  try {
+    return JSON.parse(datos) as {
+      nombre: string
+      correo: string
+    }
+  } catch {
+    return null
+  }
+})
+
+// Obtiene la inicial del nombre.
+const inicialUsuario = computed(() =>
+  usuarioSesion.value?.nombre?.charAt(0).toUpperCase() || 'S'
+)
+
+// Cierra la sesión del usuario autenticado.
+async function cerrarSesion() {
+  // Elimina el token JWT almacenado.
+  sessionStorage.removeItem('sicop_token')
+
+  // Elimina la información del usuario autenticado.
+  sessionStorage.removeItem('sicop_usuario')
+
+  // Redirige al inicio de sesión.
+  await router.replace('/login')
+}
 </script>
 
 <template>
@@ -62,21 +99,25 @@ import { RouterLink } from 'vue-router'
 
     <!-- Parte inferior -->
     <div class="sidebar-footer">
-      <div class="user-info">
-        <div class="user-avatar">S</div>
+          <div class="user-info">
+            <div class="user-avatar">{{ inicialUsuario }}</div>
 
-        <div>
-          <strong>SICOP</strong>
-          <small>Sesión de demostración</small>
+            <div>
+              <strong>{{ usuarioSesion?.nombre || 'SICOP' }}</strong>
+              <small>{{ usuarioSesion?.correo || '' }}</small>
+            </div>
+          </div>
+
+          <!-- Cierra la sesión real del usuario. -->
+          <button
+            type="button"
+            class="logout-button"
+            @click="cerrarSesion"
+            >
+              <span>↪</span>
+              <span>Cerrar sesión</span>
+            </button>
         </div>
-      </div>
-
-      <!-- Navegación temporal, no cierra una sesión real -->
-      <RouterLink to="/login" class="logout-button">
-        <span>↪</span>
-        <span>Volver al Login</span>
-      </RouterLink>
-    </div>
 
   </aside>
 </template>
@@ -233,6 +274,12 @@ a.nav-item:hover {
   color: #e6d9f6;
   text-decoration: none;
   font-size: 13px;
+  background: transparent;
+  border: none;
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .logout-button:hover {

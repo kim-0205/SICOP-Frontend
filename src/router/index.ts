@@ -61,7 +61,8 @@ const router = createRouter({
 
       path: '/',
       component: MainLayout,
-
+        // Todas las vistas administrativas requieren autenticación.
+        meta: { requiereAuth: true },
       children: [
         {
           // Panel principal.
@@ -108,6 +109,34 @@ const router = createRouter({
       component: PruebaConexionView,
     },
   ],
+})
+
+// =============================================
+// PROTECCIÓN DE RUTAS MEDIANTE AUTENTICACIÓN
+// =============================================
+
+router.beforeEach((to) => {
+
+  // Obtiene el token JWT guardado al iniciar sesión.
+  const token = sessionStorage.getItem('sicop_token')
+
+  // Verifica si la ruta requiere autenticación.
+  const requiereAuth = to.matched.some(
+    (ruta) => ruta.meta.requiereAuth
+  )
+
+  // Si no existe token, redirige al login.
+  if (requiereAuth && !token) {
+    return { name: 'login' }
+  }
+
+  // Si ya inició sesión, evita volver al login.
+  if (to.name === 'login' && token) {
+    return { name: 'dashboard' }
+  }
+
+  // Permite continuar hacia la ruta solicitada.
+  return true
 })
 
 // Exportamos el router para utilizarlo en SICOP.

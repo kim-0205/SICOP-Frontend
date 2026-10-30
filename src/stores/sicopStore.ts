@@ -1,14 +1,18 @@
 
 import { computed, ref } from 'vue'
+// Conexión con el backend ASP.NET Core.
+import { apiGet } from '@/services/api'
+
 
 // =============================================
 // ESTRUCTURAS DE DATOS DEL SISTEMA
 // =============================================
 
-// Información básica del proveedor.
+// Información del proveedor disponible en SICOP.
 export interface ProveedorOpcion {
   proveedorId: number
   nombre: string
+  activo: boolean
 }
 
 // Datos de una factura de compra.
@@ -22,6 +26,25 @@ export interface FacturaCompra {
   observaciones: string
   nombreProveedor: string
   saldoPendiente: number
+  anulada: boolean
+  fechaAnulacion: string | null
+  motivoAnulacion: string | null
+  anuladaPorUsuarioId: number | null
+}
+
+// Datos que devuelve GET /api/FacturasCompras.
+interface FacturaCompraRespuestaDto {
+  facturaCompraId: number
+  proveedorId: number
+  numeroFactura: string
+  fechaEmision: string
+  fechaVencimiento: string
+  total: number
+  observaciones: string | null
+  anulada: boolean
+  fechaAnulacion: string | null
+  motivoAnulacion: string | null
+  anuladaPorUsuarioId: number | null
 }
 
 // Datos necesarios para registrar una factura.
@@ -35,7 +58,7 @@ export interface FacturaFormulario {
   observaciones: string
 }
 
-// Información de un pago.
+// Información de un pago registrado.
 export interface Pago {
   pagoId: number
   facturaCompraId: number
@@ -44,6 +67,11 @@ export interface Pago {
   metodoPago: string
   referencia: string
   observaciones: string
+
+  // Datos de anulación controlados por el backend.
+  anulado: boolean
+  fechaAnulacion: string | null
+  motivoAnulacion: string | null
 }
 
 // Datos para registrar un nuevo pago.
@@ -57,96 +85,142 @@ export interface PagoFormulario {
 }
 
 // =============================================
-// DATOS TEMPORALES DE PROVEEDORES
+// PROVEEDORES OBTENIDOS DESDE SQL SERVER
 // =============================================
 
-export const proveedores = ref<ProveedorOpcion[]>([
-  {
-    proveedorId: 1,
-    nombre: 'Distribuidora Central'
-  },
-  {
-    proveedorId: 2,
-    nombre: 'Comercial La Esperanza'
-  },
-  {
-    proveedorId: 3,
-    nombre: 'Suministros del Sur'
-  }
-])
+// Lista compartida con el formulario de facturas.
+export const proveedores = ref<ProveedorOpcion[]>([])
+
+// Estructura recibida desde GET /api/Proveedores.
+interface ProveedorRespuestaDto {
+  proveedorId: number
+  nombre: string
+  activo: boolean
+}
+
+// Consultar proveedores reales.
+export async function cargarProveedoresFacturas(): Promise<void> {
+
+  // Obtener los proveedores desde ASP.NET Core.
+  const respuesta = await apiGet<ProveedorRespuestaDto[]>(
+    '/api/Proveedores'
+  )
+
+  // Conservar proveedores activos e inactivos.
+// Los inactivos pueden tener facturas históricas.
+proveedores.value = respuesta.map(proveedor => ({
+  proveedorId: proveedor.proveedorId,
+  nombre: proveedor.nombre,
+  activo: proveedor.activo
+}))
+}
 
 // =============================================
-// DATOS TEMPORALES DE FACTURAS
+// FACTURAS OBTENIDAS DESDE SQL SERVER
 // =============================================
 
-// Estos datos serán sustituidos posteriormente
-// por consultas al backend ASP.NET Core.
-export const facturas = ref<FacturaCompra[]>([
-  {
-    facturaCompraId: 1,
-    proveedorId: 1,
-    numeroFactura: 'FAC-001',
-    fechaEmision: '2026-10-01',
-    fechaVencimiento: '2026-11-01',
-    total: 4500,
-    observaciones: 'Compra de suministros',
-    nombreProveedor: 'Distribuidora Central',
-    saldoPendiente: 4500
-  },
-  {
-    facturaCompraId: 2,
-    proveedorId: 2,
-    numeroFactura: 'FAC-002',
-    fechaEmision: '2026-10-05',
-    fechaVencimiento: '2026-11-05',
-    total: 3200,
-    observaciones: 'Compra de materiales',
-    nombreProveedor: 'Comercial La Esperanza',
-    saldoPendiente: 1200
-  },
-  {
-    facturaCompraId: 3,
-    proveedorId: 3,
-    numeroFactura: 'FAC-003',
-    fechaEmision: '2026-10-10',
-    fechaVencimiento: '2026-11-10',
-    total: 1850,
-    observaciones: 'Compra de artículos',
-    nombreProveedor: 'Suministros del Sur',
-    saldoPendiente: 0
-  }
-])
+// Al iniciar, no mostramos facturas de demostración.
+// Los registros se cargarán desde la API .NET.
+export const facturas = ref<FacturaCompra[]>([])
+
+// Estructura del saldo calculado por el backend.
+interface SaldoFacturaRespuestaDto {
+  facturaCompraId: number
+  total: number
+  totalPagado: number
+  saldoPendiente: number
+}
+
+// Consultar las facturas reales y sus saldos.
+export async function cargarFacturas(): Promise<void> {
+
+  // Obtener las facturas registradas en SQL Server.
+  const respuesta = await apiGet<FacturaCompraRespuestaDto[]>(
+    '/api/FacturasCompras'
+  )
+
+  // Consultar el saldo real de cada factura.
+  const facturasConSaldo = await Promise.all(
+    respuesta.map(async factura => {
+
+      const saldo = await apiGet<SaldoFacturaRespuestaDto>(
+        `/api/FacturasCompras/${factura.facturaCompraId}/saldo`
+      )
+
+      // Identificar el proveedor de la factura.
+      const proveedor = proveedores.value.find(
+        item => item.proveedorId === factura.proveedorId
+      )
+
+      return {
+        facturaCompraId: factura.facturaCompraId,
+        proveedorId: factura.proveedorId,
+        numeroFactura: factura.numeroFactura,
+        fechaEmision: factura.fechaEmision,
+        fechaVencimiento: factura.fechaVencimiento,
+        total: factura.total,
+        observaciones: factura.observaciones ?? '',
+        nombreProveedor: proveedor?.nombre ?? 'Proveedor no encontrado',
+
+        // Saldo calculado por FacturaService en .NET.
+        saldoPendiente: saldo.saldoPendiente,
+
+        // Información real de anulación.
+        anulada: factura.anulada,
+        fechaAnulacion: factura.fechaAnulacion,
+        motivoAnulacion: factura.motivoAnulacion,
+        anuladaPorUsuarioId: factura.anuladaPorUsuarioId
+      }
+    })
+  )
+
+  // Actualizar la lista compartida con datos reales.
+  facturas.value = facturasConSaldo
+}
 
 // =============================================
-// DATOS TEMPORALES DE PAGOS
+// PAGOS OBTENIDOS DESDE SQL SERVER
 // =============================================
 
-// Registramos pagos de demostración para que
-// coincidan con los saldos iniciales.
-//
-// FAC-002: Q3,200 - Q2,000 = Q1,200.
-// FAC-003: Q1,850 - Q1,850 = Q0.
+// Estructura que devuelve GET /api/Pagos.
+interface PagoRespuestaDto {
+  pagoId: number
+  facturaCompraId: number
+  fechaPago: string
+  monto: number
+  metodoPago: string
+  referencia: string | null
+  observaciones: string | null
+  anulado: boolean
+  fechaAnulacion: string | null
+  motivoAnulacion: string | null
+}
 
-export const pagos = ref<Pago[]>([
-  {
-    pagoId: 1,
-    facturaCompraId: 2,
-    fechaPago: '2026-10-15',
-    monto: 2000,
-    metodoPago: 'Transferencia',
-    referencia: 'TRF-001',
-    observaciones: 'Primer abono'
-  },
-  {
-    pagoId: 2,
-    facturaCompraId: 3,
-    fechaPago: '2026-10-20',
-    monto: 1850,
-    metodoPago: 'Efectivo',
-    referencia: 'PAG-002',
-    observaciones: 'Pago completo'
-  }
-])
+// Lista compartida de pagos reales.
+export const pagos = ref<Pago[]>([])
+
+// Consultar los pagos registrados en SQL Server.
+export async function cargarPagos(): Promise<void> {
+
+  // Obtener los pagos desde ASP.NET Core.
+  const respuesta = await apiGet<PagoRespuestaDto[]>(
+    '/api/Pagos'
+  )
+
+  // Convertir la respuesta en datos para el frontend.
+  pagos.value = respuesta.map(pago => ({
+    pagoId: pago.pagoId,
+    facturaCompraId: pago.facturaCompraId,
+    fechaPago: pago.fechaPago,
+    monto: pago.monto,
+    metodoPago: pago.metodoPago,
+    referencia: pago.referencia ?? '',
+    observaciones: pago.observaciones ?? '',
+    anulado: pago.anulado,
+    fechaAnulacion: pago.fechaAnulacion,
+    motivoAnulacion: pago.motivoAnulacion
+  }))
+}
 
 // =============================================
 // FUNCIONES AUXILIARES
@@ -165,9 +239,17 @@ export function formatoMoneda(valor: number): string {
   }).format(valor)
 }
 
-// Mostrar las fechas como día/mes/año.
+// Mostrar fechas de SQL Server en formato día/mes/año.
 export function formatoFecha(fecha: string): string {
-  const [anio, mes, dia] = fecha.split('-')
+
+  if (!fecha) {
+    return '—'
+  }
+
+  // Obtener únicamente la fecha, sin la hora.
+  const fechaSinHora = fecha.split('T')[0] ?? ''
+
+  const [anio, mes, dia] = fechaSinHora.split('-')
 
   if (!anio || !mes || !dia) {
     return fecha
@@ -226,115 +308,6 @@ export function actualizarSaldos(): void {
 }
 
 // =============================================
-// REGISTRO Y EDICIÓN DE FACTURAS
-// =============================================
-
-export function guardarFactura(
-  datos: FacturaFormulario
-): void {
-  const proveedor = proveedores.value.find(
-    item => item.proveedorId === datos.proveedorId
-  )
-
-  if (!proveedor) {
-    throw new Error('Seleccione un proveedor válido.')
-  }
-
-  if (
-    !datos.numeroFactura.trim() ||
-    !Number.isFinite(datos.total) ||
-    datos.total <= 0
-  ) {
-    throw new Error(
-      'Ingrese un número de factura y un monto válido.'
-    )
-  }
-
-  if (
-    !datos.fechaEmision ||
-    !datos.fechaVencimiento ||
-    datos.fechaVencimiento < datos.fechaEmision
-  ) {
-    throw new Error(
-      'Verifique las fechas de la factura.'
-    )
-  }
-
-  // Evitar números duplicados para el mismo proveedor.
-  const duplicada = facturas.value.some(
-    factura =>
-      factura.proveedorId === datos.proveedorId &&
-      factura.numeroFactura.trim().toLowerCase() ===
-        datos.numeroFactura.trim().toLowerCase() &&
-      factura.facturaCompraId !== datos.facturaCompraId
-  )
-
-  if (duplicada) {
-    throw new Error(
-      'Ya existe una factura con ese número para el proveedor.'
-    )
-  }
-
-  const total = redondear(datos.total)
-
-  // Editar una factura existente.
-  if (datos.facturaCompraId !== undefined) {
-    const factura = facturas.value.find(
-      item =>
-        item.facturaCompraId === datos.facturaCompraId
-    )
-
-    if (!factura) {
-      throw new Error('No se encontró la factura.')
-    }
-
-    const montoPagado = obtenerMontoPagado(
-      factura.facturaCompraId
-    )
-
-    // No permitir reducir el total por debajo
-    // del dinero que ya se ha pagado.
-    if (total < montoPagado) {
-      throw new Error(
-        `El total no puede ser menor al monto pagado: ${formatoMoneda(montoPagado)}.`
-      )
-    }
-
-    factura.proveedorId = datos.proveedorId
-    factura.nombreProveedor = proveedor.nombre
-    factura.numeroFactura = datos.numeroFactura.trim()
-    factura.fechaEmision = datos.fechaEmision
-    factura.fechaVencimiento = datos.fechaVencimiento
-    factura.total = total
-    factura.observaciones = datos.observaciones
-
-    actualizarSaldos()
-    return
-  }
-
-  // Registrar una nueva factura.
-  const nuevoId = facturas.value.length > 0
-    ? Math.max(
-        ...facturas.value.map(
-          factura => factura.facturaCompraId
-        )
-      ) + 1
-    : 1
-
-  facturas.value.push({
-    facturaCompraId: nuevoId,
-    proveedorId: datos.proveedorId,
-    nombreProveedor: proveedor.nombre,
-    numeroFactura: datos.numeroFactura.trim(),
-    fechaEmision: datos.fechaEmision,
-    fechaVencimiento: datos.fechaVencimiento,
-    total,
-    observaciones: datos.observaciones,
-    saldoPendiente: total
-  })
-}
-
-// =============================================
 // REGISTRAR PAGOS
 // =============================================
 
@@ -382,14 +355,19 @@ export function registrarPago(
     : 1
 
   pagos.value.push({
-    pagoId: nuevoId,
-    facturaCompraId: datos.facturaCompraId,
-    fechaPago: datos.fechaPago,
-    monto,
-    metodoPago: datos.metodoPago,
-    referencia: datos.referencia.trim(),
-    observaciones: datos.observaciones.trim()
-  })
+  pagoId: nuevoId,
+  facturaCompraId: datos.facturaCompraId,
+  fechaPago: datos.fechaPago,
+  monto,
+  metodoPago: datos.metodoPago,
+  referencia: datos.referencia.trim(),
+  observaciones: datos.observaciones.trim(),
+
+  // Valores iniciales para mantener la estructura.
+  anulado: false,
+  fechaAnulacion: null,
+  motivoAnulacion: null
+})
 
   // Reflejar el abono en el módulo Facturas.
   actualizarSaldos()
@@ -412,20 +390,24 @@ export const montoTotalFacturado = computed(
   )
 )
 
+// Sumar únicamente los saldos de facturas vigentes.
 export const saldoTotalPendiente = computed(
   () => redondear(
-    facturas.value.reduce(
-      (suma, factura) => suma + factura.saldoPendiente,
-      0
-    )
+    facturas.value
+      .filter(factura => !factura.anulada)
+      .reduce(
+        (suma, factura) => suma + factura.saldoPendiente,
+        0
+      )
   )
 )
 
+// Contar solamente las facturas pagadas y no anuladas.
 export const totalFacturasPagadas = computed(
   () => facturas.value.filter(
-    factura => factura.saldoPendiente <= 0
+    factura =>
+      !factura.anulada &&
+      factura.saldoPendiente <= 0
   ).length
 )
 
-// Sincronizar los saldos iniciales con los pagos.
-actualizarSaldos()

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 // Importamos el formulario de proveedores.
 import ProveedorModal from '../../components/ProveedorModal.vue'
+
+import { apiGet, apiPost, apiPut, apiPatch } from '@/services/api'
 
 // Estructura de los datos de un proveedor.
 interface Proveedor {
@@ -34,35 +36,39 @@ interface ProveedorFormulario {
 // obtenidos desde la API de ASP.NET Core.
 // --------------------------------------------------
 
-const proveedores = ref<Proveedor[]>([
-  {
-    proveedorId: 1,
-    nombre: 'Distribuidora Central',
-    nit: '1234567-8',
-    telefono: '5555-1234',
-    correo: 'ventas@distribuidora.com',
-    direccion: 'Ciudad de Guatemala',
-    activo: true
-  },
-  {
-    proveedorId: 2,
-    nombre: 'Comercial La Esperanza',
-    nit: '8765432-1',
-    telefono: '5555-5678',
-    correo: 'contacto@laesperanza.com',
-    direccion: 'Escuintla, Guatemala',
-    activo: true
-  },
-  {
-    proveedorId: 3,
-    nombre: 'Suministros del Sur',
-    nit: '4567891-2',
-    telefono: '5555-9012',
-    correo: 'info@suministros.com',
-    direccion: 'Santa Rosa, Guatemala',
-    activo: false
+// Lista de proveedores obtenidos desde SQL Server.
+const proveedores = ref<Proveedor[]>([])
+
+// =============================================
+// PERMISOS DEL USUARIO AUTENTICADO
+// =============================================
+
+// Recuperar la información del usuario que inició sesión.
+const usuarioGuardado = sessionStorage.getItem('sicop_usuario')
+
+// Obtener el rol del usuario autenticado.
+// Obtener el identificador del rol del usuario autenticado.
+const rolUsuario = usuarioGuardado
+  ? Number(JSON.parse(usuarioGuardado).rolId)
+  : null
+
+// Rol 1: Administrador General.
+const esAdministradorGeneral = rolUsuario === 1
+
+// Consulta los proveedores registrados en el backend.
+async function cargarProveedores() {
+  try {
+    proveedores.value = await apiGet<Proveedor[]>('/api/Proveedores')
+  } catch (error) {
+    console.error('Error al consultar proveedores:', error)
   }
-])
+}
+
+// Ejecuta la consulta al ingresar al módulo.
+onMounted(() => {
+  cargarProveedores()
+})
+
 
 // --------------------------------------------------
 // BUSCADOR DE PROVEEDORES
@@ -101,7 +107,14 @@ function nuevoProveedor() {
 
 // Abrir formulario para editar un proveedor.
 function editarProveedor(proveedor: Proveedor) {
+
+  // Impedir editar proveedores inactivos.
+  if (!proveedor.activo) return
+
+  // Cargar los datos del proveedor seleccionado.
   proveedorSeleccionado.value = { ...proveedor }
+
+  // Abrir el formulario de edición.
   mostrarModal.value = true
 }
 
@@ -111,62 +124,48 @@ function cerrarModal() {
   proveedorSeleccionado.value = null
 }
 
+
 // --------------------------------------------------
-// GUARDAR PROVEEDOR (DEMOSTRACIÓN)
+// GUARDAR PROVEEDOR
 // --------------------------------------------------
-// Por ahora solo actualizamos la lista en memoria.
-// No se realizan peticiones al backend ni se
-// modifica la base de datos SQL Server.
-// --------------------------------------------------
-
-function guardarProveedor(datos: ProveedorFormulario) {
-
-  // Si existe un ID, estamos editando un proveedor.
-  if (datos.proveedorId !== undefined) {
-
-    const indice = proveedores.value.findIndex(
-      (proveedor) =>
-        proveedor.proveedorId === datos.proveedorId
-    )
-
-    // Actualizar los datos del proveedor seleccionado.
-    if (indice !== -1) {
-      proveedores.value[indice] = {
-        proveedorId: datos.proveedorId,
-        nombre: datos.nombre,
-        nit: datos.nit,
-        telefono: datos.telefono,
-        correo: datos.correo,
-        direccion: datos.direccion,
-        activo: datos.activo
-      }
-    }
-
-  } else {
-
-    // Generar un ID temporal para el nuevo proveedor.
-    const nuevoId = proveedores.value.length > 0
-      ? Math.max(
-          ...proveedores.value.map(
-            (proveedor) => proveedor.proveedorId
-          )
-        ) + 1
-      : 1
-
-    // Agregar el nuevo proveedor a la tabla.
-    proveedores.value.push({
-      proveedorId: nuevoId,
+async function guardarProveedor(datos: ProveedorFormulario) {
+  try {
+    // Campos permitidos por los DTOs del backend.
+    const proveedorDatos = {
       nombre: datos.nombre,
       nit: datos.nit,
       telefono: datos.telefono,
       correo: datos.correo,
       direccion: datos.direccion,
-      activo: datos.activo
-    })
-  }
+    }
 
-  // Cerrar el formulario después de guardar.
-  cerrarModal()
+    if (datos.proveedorId !== undefined) {
+
+      // PUT: actualizar proveedor en SQL Server.
+      await apiPut<void>(
+        `/api/Proveedores/${datos.proveedorId}`,
+        proveedorDatos
+      )
+
+    } else {
+
+      // POST: registrar proveedor en SQL Server.
+      await apiPost<Proveedor>(
+        '/api/Proveedores',
+        proveedorDatos
+      )
+    }
+
+    // Actualizar la tabla con los datos reales.
+    await cargarProveedores()
+
+    // Cerrar el formulario después de guardar.
+    cerrarModal()
+
+  } catch (error) {
+    console.error('Error al guardar proveedor:', error)
+    alert('No fue posible guardar el proveedor.')
+  }
 }
 
 
@@ -194,24 +193,43 @@ function cancelarCambioEstado() {
 
 // Cambia el estado del proveedor seleccionado.
 // Por ahora, únicamente modifica los datos temporales.
-function cambiarEstadoProveedor() {
+
+async function cambiarEstadoProveedor() {
+
+  // Obtener el proveedor seleccionado.
   const seleccionado = proveedorCambioEstado.value
 
   if (!seleccionado) return
 
-  // Buscar el proveedor dentro de nuestra lista.
-  const proveedor = proveedores.value.find(
-    (item) => item.proveedorId === seleccionado.proveedorId
-  )
+  try {
 
-  // Invertir su estado actual.
-  if (proveedor) {
-    proveedor.activo = !proveedor.activo
+    // Determinar si corresponde activar o desactivar.
+    const accion = seleccionado.activo
+      ? 'desactivar'
+      : 'activar'
+
+    // PATCH: guardar el cambio en SQL Server.
+    await apiPatch(
+      `/api/Proveedores/${seleccionado.proveedorId}/${accion}`
+    )
+
+    // Consultar nuevamente los proveedores reales.
+    await cargarProveedores()
+
+    // Cerrar la ventana de confirmación.
+    cancelarCambioEstado()
+
+  } catch (error) {
+
+    console.error('Error al cambiar el estado del proveedor:', error)
+
+    alert(
+      'No fue posible cambiar el estado del proveedor. ' +
+      'Verifica que tengas permisos de Administrador General.'
+    )
   }
-
-  // Cerrar la ventana de confirmación.
-  cancelarCambioEstado()
 }
+
 
 </script>
 
@@ -362,14 +380,17 @@ function cambiarEstadoProveedor() {
                   <button
                     class="btn-edit"
                     type="button"
+                    :disabled="!proveedor.activo"
                     @click="editarProveedor(proveedor)"
                   >
                     ✎ Editar
                   </button>
 
                   
-<!-- Activar o desactivar proveedor -->
+
+<!-- Activar o desactivar: solo Administrador General -->
 <button
+  v-if="esAdministradorGeneral"
   type="button"
   class="btn-status"
   :class="proveedor.activo ? 'btn-deactivate' : 'btn-activate'"
@@ -377,6 +398,7 @@ function cambiarEstadoProveedor() {
 >
   {{ proveedor.activo ? 'Desactivar' : 'Activar' }}
 </button>
+
 
 
                 </div>
@@ -495,6 +517,21 @@ function cambiarEstadoProveedor() {
 </template>
 
 <style scoped>
+
+  /* =========================================
+    PROVEEDORES - BOTÓN EDITAR DESHABILITADO
+    ========================================= */
+
+  /* Indica visualmente que no se puede editar. */
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* Evita efectos de interacción al pasar el mouse. */
+  button:disabled:hover {
+    transform: none;
+  }
 
 /* ========================================= */
 /* CONTENEDOR GENERAL                       */
