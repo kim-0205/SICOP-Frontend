@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { apiPost, apiPut } from '@/services/api'
 import FacturaModal from '../../components/FacturaModal.vue'
 
@@ -40,6 +40,50 @@ const facturasFiltradas = computed(() => {
     factura.numeroFactura.toLowerCase().includes(texto) ||
     factura.nombreProveedor.toLowerCase().includes(texto)
   )
+})
+
+// =============================================
+// PAGINACIÓN DE FACTURAS DE COMPRA
+// =============================================
+
+// Cantidad de facturas por página.
+const registrosPorPagina = 5
+
+// Página actual.
+const paginaActual = ref(1)
+
+// Calcular el total de páginas.
+const totalPaginas = computed(() =>
+  Math.max(1, Math.ceil(facturasFiltradas.value.length / registrosPorPagina))
+)
+
+// Obtener únicamente las facturas de la página actual.
+const facturasPaginadas = computed(() => {
+  const inicio = (paginaActual.value - 1) * registrosPorPagina
+
+  return facturasFiltradas.value.slice(
+    inicio,
+    inicio + registrosPorPagina
+  )
+})
+
+// Cambiar de página.
+function cambiarPagina(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginas.value) {
+    paginaActual.value = pagina
+  }
+}
+
+// Regresar a la primera página al buscar.
+watch(busqueda, () => {
+  paginaActual.value = 1
+})
+
+// Evitar páginas vacías cuando disminuyen los registros.
+watch(totalPaginas, (total) => {
+  if (paginaActual.value > total) {
+    paginaActual.value = total
+  }
 })
 
 // Factura seleccionada para anulación.
@@ -331,8 +375,8 @@ function claseEstado(factura: FacturaCompra): string {
           <tbody>
             <!-- Mostrar un correlativo visual según el orden de las facturas -->
             <tr
-              v-for="(factura, index) in facturasFiltradas":key="factura.facturaCompraId">
-              <td>{{ index + 1 }}</td>
+              v-for="(factura, index) in facturasPaginadas":key="factura.facturaCompraId">
+              <td>{{ (paginaActual - 1) * registrosPorPagina + index + 1 }}</td>
               <td class="invoice-number">{{ factura.numeroFactura }}</td>
               <td class="provider-name">{{ factura.nombreProveedor }}</td>
               <td>{{ formatoFecha(factura.fechaEmision) }}</td>
@@ -374,6 +418,51 @@ function claseEstado(factura: FacturaCompra): string {
           </tbody>
         </table>
       </div>
+
+      <!-- ====================================== -->
+<!-- PAGINACIÓN DE FACTURAS DE COMPRA       -->
+<!-- ====================================== -->
+
+<div
+  v-if="facturasFiltradas.length > 0"
+  class="pagination-container"
+>
+  <!-- Cantidad de registros mostrados -->
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, facturasFiltradas.length) }}
+    de {{ facturasFiltradas.length }} facturas
+  </span>
+
+  <!-- Controles de navegación -->
+  <div class="pagination-buttons">
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
+
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+
+  </div>
+</div>
     </section>
 
     <!-- Formulario de registro y edición -->
@@ -842,5 +931,68 @@ table td.acciones-factura {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+}
+/* =========================================
+   PAGINACIÓN DE FACTURAS DE COMPRA
+   ========================================= */
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #ebe3f5;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #826d99;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagination-btn {
+  padding: 10px 16px;
+  border: 1px solid #e5d9f0;
+  border-radius: 9px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #e8d9f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-current {
+  font-size: 13px;
+  font-weight: 600;
+  color: #493078;
+}
+
+@media (max-width: 600px) {
+  .pagination-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
 </style>

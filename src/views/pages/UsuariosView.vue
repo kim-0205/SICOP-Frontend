@@ -1,6 +1,6 @@
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { apiGet, apiPost, apiPut, apiPatch } from '@/services/api'
 import UsuarioModal from '../../components/UsuarioModal.vue'
 
@@ -117,6 +117,50 @@ const usuariosFiltrados = computed(() => {
       nombreRol.toLowerCase().includes(texto)
     )
   })
+})
+
+// ============================================
+// PAGINACIÓN DE USUARIOS
+// ============================================
+
+// Cantidad de usuarios por página.
+const registrosPorPagina = 5
+
+// Página seleccionada.
+const paginaActual = ref(1)
+
+// Total de páginas según los resultados del buscador.
+const totalPaginas = computed(() =>
+  Math.max(1, Math.ceil(usuariosFiltrados.value.length / registrosPorPagina))
+)
+
+// Usuarios que se mostrarán en la tabla.
+const usuariosPaginados = computed(() => {
+  const inicio = (paginaActual.value - 1) * registrosPorPagina
+
+  return usuariosFiltrados.value.slice(
+    inicio,
+    inicio + registrosPorPagina
+  )
+})
+
+// Cambiar de página.
+function cambiarPagina(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginas.value) {
+    paginaActual.value = pagina
+  }
+}
+
+// Volver a la primera página cuando cambie la búsqueda.
+watch(busqueda, () => {
+  paginaActual.value = 1
+})
+
+// Evitar permanecer en una página que ya no existe.
+watch(totalPaginas, (total) => {
+  if (paginaActual.value > total) {
+    paginaActual.value = total
+  }
 })
 
 // Cantidad total de usuarios.
@@ -448,10 +492,10 @@ async function confirmarCambioEstado(): Promise<void> {
           </thead>
 
           <tbody>
-            <tr
-              v-for="usuario in usuariosFiltrados"
-              :key="usuario.usuarioId"
-            >
+              <tr
+                v-for="usuario in usuariosPaginados"
+                :key="usuario.usuarioId"
+              >
               <td class="id-cell">
                 #{{ usuario.usuarioId }}
               </td>
@@ -535,9 +579,44 @@ async function confirmarCambioEstado(): Promise<void> {
         </table>
       </div>
 
-      <div class="table-footer">
-        Mostrando {{ usuariosFiltrados.length }} de
-        {{ totalUsuarios }} usuarios
+            <!-- PAGINACIÓN DE USUARIOS -->
+              <div
+          v-if="!cargandoUsuarios && !errorUsuarios && usuariosFiltrados.length > 0"
+          class="table-footer pagination-footer"
+>
+
+        <span>
+          Mostrando
+          {{ usuariosFiltrados.length === 0 ? 0 : (paginaActual - 1) * registrosPorPagina + 1 }}
+          -
+          {{ Math.min(paginaActual * registrosPorPagina, usuariosFiltrados.length) }}
+          de {{ usuariosFiltrados.length }} usuarios
+        </span>
+
+        <div class="pagination-buttons">
+          <button
+            type="button"
+            class="pagination-btn"
+            :disabled="paginaActual === 1"
+            @click="cambiarPagina(paginaActual - 1)"
+          >
+            ‹ Anterior
+          </button>
+
+          <span class="pagination-current">
+            Página {{ paginaActual }} de {{ totalPaginas }}
+          </span>
+
+          <button
+            type="button"
+            class="pagination-btn"
+            :disabled="paginaActual === totalPaginas"
+            @click="cambiarPagina(paginaActual + 1)"
+          >
+            Siguiente ›
+          </button>
+        </div>
+
       </div>
     </section>
 
@@ -1105,6 +1184,59 @@ table td:last-child {
 
   .usuario-dialog-actions {
     flex-direction: column;
+  }
+}
+/* ============================================
+   PAGINACIÓN DE USUARIOS
+   ============================================ */
+
+.pagination-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pagination-btn {
+  padding: 9px 13px;
+  border: 1px solid #e5d9f0;
+  border-radius: 9px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #e8d9f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-current {
+  color: #493078;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .pagination-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 }
 </style>
