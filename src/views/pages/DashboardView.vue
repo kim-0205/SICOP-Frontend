@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Bar, Doughnut } from 'vue-chartjs'
@@ -16,7 +15,7 @@ import {
 import { apiGet } from '../../services/api'
 
 // SICOP - Dashboard administrativo.
-// Estadísticas, gráficas, facturas y pagos reales.
+// Estadísticas, gráficas, facturas, pagos y alertas.
 
 ChartJS.register(
   Title,
@@ -93,7 +92,14 @@ const datosMensuales = ref<DashboardMensual[]>([])
 
 // Facturas y pagos recientes.
 const facturasRecientes = ref<ReporteFactura[]>([])
+const facturasParaAlertas = ref<ReporteFactura[]>([])
 const pagosRecientes = ref<ReportePago[]>([])
+
+// Configuración de días para las alertas.
+const diasAlertaVencimiento = ref(5)
+
+// Estado de carga de la configuración.
+const cargandoConfiguracionAlertas = ref(false)
 
 // Estados de carga.
 const cargando = ref(true)
@@ -119,8 +125,6 @@ function formatoMoneda(valor: number): string {
 }
 
 // Formato de fecha.
-// Se utiliza la parte YYYY-MM-DD para evitar
-// cambios de día por diferencias de zona horaria.
 function formatoFecha(fecha: string): string {
   if (!fecha) return '—'
 
@@ -169,9 +173,34 @@ async function cargarGraficas() {
   }
 }
 
-// NUEVO: Consultar las facturas vigentes recientes.
-// Se combinan pendientes y pagadas para incluir
-// facturas independientemente de su saldo.
+// Consultar los días de anticipación configurados.
+async function cargarConfiguracionAlertas() {
+  cargandoConfiguracionAlertas.value = true
+
+  try {
+    const respuesta = await apiGet<{ dias: number }>(
+      '/api/ParametrosSistemas/dias-alerta-vencimiento'
+    )
+
+    diasAlertaVencimiento.value =
+      respuesta.dias > 0 ? respuesta.dias : 5
+
+  } catch (err) {
+    console.error(
+      'Error al cargar configuración de alertas:',
+      err
+    )
+
+    // Valor de respaldo si no se puede consultar el parámetro.
+    diasAlertaVencimiento.value = 5
+
+  } finally {
+    cargandoConfiguracionAlertas.value = false
+  }
+}
+
+// Consultar facturas recientes y conservar
+// todas las facturas pendientes para las alertas.
 async function cargarFacturasRecientes() {
   cargandoFacturas.value = true
   errorFacturas.value = ''
@@ -186,7 +215,14 @@ async function cargarFacturasRecientes() {
       ),
     ])
 
-    // Unificar resultados y ordenar por fecha de emisión.
+    // Conserva todas las facturas pendientes
+    // que todavía tengan saldo por pagar.
+    facturasParaAlertas.value = pendientes.filter(
+      factura => Number(factura.saldoPendiente) > 0
+    )
+
+    // Combina y ordena las facturas recientes.
+    // Conserva únicamente las cinco más recientes.
     facturasRecientes.value = [...pendientes, ...pagadas]
       .sort((a, b) => {
         const diferencia =
@@ -200,17 +236,24 @@ async function cargarFacturasRecientes() {
       .slice(0, 5)
 
   } catch (err) {
-    console.error('Error al cargar facturas recientes:', err)
+    console.error(
+      'Error al cargar facturas recientes:',
+      err
+    )
+
     facturasRecientes.value = []
+    facturasParaAlertas.value = []
+
     errorFacturas.value =
       'No se pudieron consultar las facturas recientes.'
+
   } finally {
     cargandoFacturas.value = false
   }
 }
 
-// NUEVO: Consultar los últimos pagos registrados.
-// El historial conserva también los pagos anulados.
+// Consultar los últimos pagos registrados.
+// Se conservan también los pagos anulados en el historial.
 async function cargarPagosRecientes() {
   cargandoPagos.value = true
   errorPagos.value = ''
@@ -233,25 +276,117 @@ async function cargarPagosRecientes() {
       .slice(0, 5)
 
   } catch (err) {
-    console.error('Error al cargar pagos recientes:', err)
+    console.error(
+      'Error al cargar pagos recientes:',
+      err
+    )
+
     pagosRecientes.value = []
+
     errorPagos.value =
       'No se pudo consultar la actividad reciente.'
+
   } finally {
     cargandoPagos.value = false
   }
 }
 
+// Calcular los días restantes hasta el vencimiento.
+// Calcular los días restantes hasta el vencimiento.
+function calcularDiasRestantes(fechaVencimiento: string): number {
+  if (!fechaVencimiento) return Number.NaN
+
+  const partes = fechaVencimiento
+    .substring(0, 10)
+    .split('-')
+    .map(Number)
+
+  if (partes.length !== 3 || partes.some(Number.isNaN)) {
+    return Number.NaN
+  }
+
+  const anio = partes[0] ?? 0
+  const mes = partes[1] ?? 0
+  const dia = partes[2] ?? 0
+
+  if (
+    anio < 1 ||
+    mes < 1 || mes > 12 ||
+    dia < 1 || dia > 31
+  ) {
+    return Number.NaN
+  }
+
+  const hoy = new Date()
+
+  const fechaActual = new Date(
+    hoy.getFullYear(),
+    hoy.getMonth(),
+    hoy.getDate()
+  )
+
+  const vencimiento = new Date(
+    anio,
+    mes - 1,
+    dia
+  )
+
+  return Math.round(
+    (vencimiento.getTime() - fechaActual.getTime()) /
+    (1000 * 60 * 60 * 24)
+  )
+}
+
+// Facturas próximas a vencer.
+// Solo se incluyen facturas con saldo pendiente.
+const facturasProximasVencer = computed(() =>
+  facturasParaAlertas.value
+    .filter((factura) => {
+      const diasRestantes = calcularDiasRestantes(
+        factura.fechaVencimiento
+      )
+
+      return (
+        Number(factura.saldoPendiente) > 0 &&
+        diasRestantes >= 0 &&
+        diasRestantes <= diasAlertaVencimiento.value
+      )
+    })
+    .sort((a, b) =>
+      calcularDiasRestantes(a.fechaVencimiento) -
+      calcularDiasRestantes(b.fechaVencimiento)
+    )
+)
+
+// Facturas vencidas que todavía tienen saldo pendiente.
+const facturasVencidasAlerta = computed(() =>
+  facturasParaAlertas.value
+    .filter((factura) => {
+      const diasRestantes = calcularDiasRestantes(
+        factura.fechaVencimiento
+      )
+
+      return (
+        Number(factura.saldoPendiente) > 0 &&
+        diasRestantes < 0
+      )
+    })
+    .sort((a, b) =>
+      calcularDiasRestantes(a.fechaVencimiento) -
+      calcularDiasRestantes(b.fechaVencimiento)
+    )
+)
+
 // Gráfica de barras: facturación y pagos mensuales.
 const graficaMensual = computed(() => ({
   labels: datosMensuales.value.map(
-    (dato) => dato.nombreMes
+    dato => dato.nombreMes
   ),
   datasets: [
     {
       label: 'Facturado',
       data: datosMensuales.value.map(
-        (dato) => dato.totalFacturado
+        dato => dato.totalFacturado
       ),
       backgroundColor: '#7551a7',
       borderRadius: 6,
@@ -260,7 +395,7 @@ const graficaMensual = computed(() => ({
     {
       label: 'Pagado',
       data: datosMensuales.value.map(
-        (dato) => dato.totalPagado
+        dato => dato.totalPagado
       ),
       backgroundColor: '#c5a7e8',
       borderRadius: 6,
@@ -290,14 +425,13 @@ const opcionesMensuales: ChartOptions<'bar'> = {
     y: {
       beginAtZero: true,
       ticks: {
-        callback: (valor) => formatoMoneda(Number(valor)),
+        callback: valor => formatoMoneda(Number(valor)),
       },
     },
   },
 }
 
 // Gráfica circular: estado de las facturas.
-// Las vencidas ya están incluidas entre las pendientes.
 const graficaEstados = computed(() => ({
   labels: ['Pagadas', 'Pendientes o parciales'],
   datasets: [
@@ -339,6 +473,7 @@ onMounted(() => {
   cargarGraficas()
   cargarFacturasRecientes()
   cargarPagosRecientes()
+  cargarConfiguracionAlertas()
 })
 </script>
 
@@ -365,30 +500,202 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- Alertas de vencimiento -->
+    <section
+      class="alerts-section"
+      aria-label="Alertas de vencimiento"
+    >
+
+      <div class="alerts-heading">
+        <div>
+          <h2>Alertas de vencimiento</h2>
+
+          <p>
+            Facturas con saldo pendiente que requieren seguimiento.
+            Configuración: {{ diasAlertaVencimiento }}
+            días de anticipación.
+          </p>
+        </div>
+
+        <span class="alerts-icon">♧</span>
+      </div>
+
+      <div
+        v-if="cargandoFacturas || cargandoConfiguracionAlertas"
+        class="alerts-empty"
+      >
+        Cargando alertas de vencimiento…
+      </div>
+
+      <div v-else class="alerts-grid">
+
+        <!-- Facturas próximas a vencer -->
+        <article class="alert-card alert-upcoming">
+
+          <div class="alert-card-heading">
+            <div>
+              <span class="alert-kicker">
+                PRÓXIMAS A VENCER
+              </span>
+
+              <strong>
+                {{ facturasProximasVencer.length }}
+              </strong>
+            </div>
+
+            <span class="alert-status upcoming-status">
+              Por vencer
+            </span>
+          </div>
+
+          <div
+            v-if="facturasProximasVencer.length === 0"
+            class="alert-no-items"
+          >
+            No hay facturas próximas a vencer.
+          </div>
+
+          <div v-else class="alert-list">
+
+            <div
+              v-for="factura in facturasProximasVencer"
+              :key="`proxima-${factura.facturaCompraId}`"
+              class="alert-item"
+            >
+
+              <div class="alert-item-details">
+                <strong>{{ factura.numeroFactura }}</strong>
+
+                <span>
+                  {{ factura.nombreProveedor }}
+                </span>
+
+                <small>
+                  Vence:
+                  {{ formatoFecha(factura.fechaVencimiento) }}
+                </small>
+              </div>
+
+              <div class="alert-item-amount">
+                <strong>
+                  {{ formatoMoneda(Number(factura.saldoPendiente)) }}
+                </strong>
+
+                <small>
+                  {{
+                    calcularDiasRestantes(factura.fechaVencimiento) === 0
+                      ? 'Vence hoy'
+                      : `En ${calcularDiasRestantes(factura.fechaVencimiento)} días`
+                  }}
+                </small>
+              </div>
+
+            </div>
+
+          </div>
+        </article>
+
+        <!-- Facturas vencidas -->
+        <article class="alert-card alert-overdue">
+
+          <div class="alert-card-heading">
+            <div>
+              <span class="alert-kicker">
+                FACTURAS VENCIDAS
+              </span>
+
+              <strong>
+                {{ facturasVencidasAlerta.length }}
+              </strong>
+            </div>
+
+            <span class="alert-status overdue-status">
+              Requieren atención
+            </span>
+          </div>
+
+          <div
+            v-if="facturasVencidasAlerta.length === 0"
+            class="alert-no-items"
+          >
+            No hay facturas vencidas con saldo pendiente.
+          </div>
+
+          <div v-else class="alert-list">
+
+            <div
+              v-for="factura in facturasVencidasAlerta"
+              :key="`vencida-${factura.facturaCompraId}`"
+              class="alert-item"
+            >
+
+              <div class="alert-item-details">
+                <strong>{{ factura.numeroFactura }}</strong>
+
+                <span>
+                  {{ factura.nombreProveedor }}
+                </span>
+
+                <small>
+                  Venció:
+                  {{ formatoFecha(factura.fechaVencimiento) }}
+                </small>
+              </div>
+
+              <div class="alert-item-amount">
+                <strong>
+                  {{ formatoMoneda(Number(factura.saldoPendiente)) }}
+                </strong>
+
+                <small>
+                  Hace
+                  {{ Math.abs(calcularDiasRestantes(factura.fechaVencimiento)) }}
+                  días
+                </small>
+              </div>
+
+            </div>
+
+          </div>
+        </article>
+
+      </div>
+
+      <p v-if="errorFacturas" class="alerts-note">
+        No fue posible cargar las facturas para generar las alertas.
+      </p>
+
+    </section>
+
     <!-- Tarjetas originales -->
     <section class="stats-grid">
 
       <article class="stat-card">
         <div class="stat-icon">♙</div>
         <p>Total de proveedores</p>
+
         <h2>
           {{ cargando ? '…' : (resumen?.totalProveedores ?? '—') }}
         </h2>
+
         <span>Proveedores activos</span>
       </article>
 
       <article class="stat-card">
         <div class="stat-icon">▤</div>
         <p>Facturas registradas</p>
+
         <h2>
           {{ cargando ? '…' : (resumen?.totalFacturas ?? '—') }}
         </h2>
+
         <span>Facturas de compra vigentes</span>
       </article>
 
       <article class="stat-card">
         <div class="stat-icon">◈</div>
         <p>Saldo pendiente</p>
+
         <h2>
           {{
             cargando
@@ -398,12 +705,14 @@ onMounted(() => {
                 : '—'
           }}
         </h2>
+
         <span>Cuentas pendientes de pago</span>
       </article>
 
       <article class="stat-card">
         <div class="stat-icon">✓</div>
         <p>Total pagado</p>
+
         <h2>
           {{
             cargando
@@ -413,6 +722,7 @@ onMounted(() => {
                 : '—'
           }}
         </h2>
+
         <span>Monto abonado a facturas</span>
       </article>
 
@@ -427,6 +737,7 @@ onMounted(() => {
         <div class="chart-header">
           <div>
             <h3>Facturación y pagos mensuales</h3>
+
             <p class="card-description">
               Comparación de los movimientos financieros.
             </p>
@@ -454,6 +765,7 @@ onMounted(() => {
 
         <div v-else-if="errorGraficas" class="chart-message">
           <p>{{ errorGraficas }}</p>
+
           <button
             type="button"
             class="retry-button"
@@ -476,6 +788,7 @@ onMounted(() => {
       <article class="content-card chart-card">
 
         <h3>Estado de las facturas</h3>
+
         <p class="card-description">
           Distribución de las facturas vigentes.
         </p>
@@ -511,7 +824,7 @@ onMounted(() => {
 
     </section>
 
-    <!-- NUEVO: Facturas y actividad reciente -->
+    <!-- Facturas y actividad reciente -->
     <section class="dashboard-content">
 
       <!-- Últimas facturas -->
@@ -520,10 +833,12 @@ onMounted(() => {
         <div class="section-header">
           <div>
             <h3>Facturas recientes</h3>
+
             <p class="card-description">
               Últimas facturas registradas en el sistema.
             </p>
           </div>
+
           <span class="section-icon">▤</span>
         </div>
 
@@ -535,6 +850,7 @@ onMounted(() => {
         <div v-else-if="errorFacturas" class="empty-state">
           <span>!</span>
           <p>{{ errorFacturas }}</p>
+
           <button
             type="button"
             class="retry-button"
@@ -554,6 +870,7 @@ onMounted(() => {
         </div>
 
         <div v-else class="recent-list">
+
           <div
             v-for="factura in facturasRecientes"
             :key="factura.facturaCompraId"
@@ -565,6 +882,7 @@ onMounted(() => {
               <div class="recent-details">
                 <strong>{{ factura.numeroFactura }}</strong>
                 <span>{{ factura.nombreProveedor }}</span>
+
                 <small>
                   {{ formatoFecha(factura.fechaEmision) }}
                 </small>
@@ -572,7 +890,9 @@ onMounted(() => {
             </div>
 
             <div class="recent-item-right">
-              <strong>{{ formatoMoneda(factura.total) }}</strong>
+              <strong>
+                {{ formatoMoneda(factura.total) }}
+              </strong>
 
               <span
                 class="status-badge"
@@ -585,6 +905,7 @@ onMounted(() => {
               </span>
             </div>
           </div>
+
         </div>
 
       </article>
@@ -595,10 +916,12 @@ onMounted(() => {
         <div class="section-header">
           <div>
             <h3>Actividad reciente</h3>
+
             <p class="card-description">
               Últimos pagos registrados en SICOP.
             </p>
           </div>
+
           <span class="section-icon">◷</span>
         </div>
 
@@ -610,6 +933,7 @@ onMounted(() => {
         <div v-else-if="errorPagos" class="empty-state">
           <span>!</span>
           <p>{{ errorPagos }}</p>
+
           <button
             type="button"
             class="retry-button"
@@ -629,6 +953,7 @@ onMounted(() => {
         </div>
 
         <div v-else class="recent-list">
+
           <div
             v-for="pago in pagosRecientes"
             :key="pago.pagoId"
@@ -640,6 +965,7 @@ onMounted(() => {
               <div class="recent-details">
                 <strong>Pago #{{ pago.pagoId }}</strong>
                 <span>{{ pago.nombreProveedor }}</span>
+
                 <small>
                   {{ pago.numeroFactura }} ·
                   {{ formatoFecha(pago.fechaPago) }}
@@ -664,6 +990,7 @@ onMounted(() => {
               </span>
             </div>
           </div>
+
         </div>
 
       </article>
@@ -739,6 +1066,178 @@ onMounted(() => {
 
 .error-message button:hover {
   background: #ffe7e7;
+}
+
+/* Alertas de vencimiento */
+.alerts-section {
+  margin-bottom: 28px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #eee5f7;
+  border-radius: 16px;
+  box-shadow: 0 5px 18px rgba(73, 48, 120, 0.04);
+}
+
+.alerts-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.alerts-heading h2 {
+  margin: 0 0 6px;
+  color: #33234d;
+  font-size: 19px;
+}
+
+.alerts-heading p {
+  margin: 0;
+  color: #89799d;
+  font-size: 13px;
+}
+
+.alerts-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #eee5f7;
+  color: #7551a7;
+  font-size: 22px;
+}
+
+.alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.alert-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #eee5f7;
+  border-radius: 13px;
+  background: #fdfbff;
+}
+
+.alert-upcoming {
+  border-left: 4px solid #a17acb;
+}
+
+.alert-overdue {
+  border-left: 4px solid #c46a78;
+}
+
+.alert-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.alert-card-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.alert-kicker {
+  color: #89799d;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.alert-card-heading strong {
+  color: #493078;
+  font-size: 25px;
+}
+
+.alert-status {
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.upcoming-status {
+  background: #f0e7fa;
+  color: #7551a7;
+}
+
+.overdue-status {
+  background: #fff0f0;
+  color: #a94355;
+}
+
+.alert-no-items,
+.alerts-empty {
+  padding: 18px 10px;
+  color: #89799d;
+  font-size: 13px;
+  text-align: center;
+}
+
+.alert-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #f0e9f7;
+}
+
+.alert-item-details,
+.alert-item-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.alert-item-details strong {
+  color: #493078;
+  font-size: 12px;
+}
+
+.alert-item-details span {
+  color: #89799d;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.alert-item-details small,
+.alert-item-amount small {
+  color: #a69bb2;
+  font-size: 10px;
+}
+
+.alert-item-amount {
+  align-items: flex-end;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.alert-item-amount strong {
+  color: #493078;
+  font-size: 12px;
+}
+
+.alerts-note {
+  margin: 12px 0 0;
+  color: #a94355;
+  font-size: 12px;
 }
 
 /* Tarjetas estadísticas */
@@ -1068,7 +1567,8 @@ onMounted(() => {
 
   .stats-grid,
   .charts-grid,
-  .dashboard-content {
+  .dashboard-content,
+  .alerts-grid {
     grid-template-columns: 1fr;
   }
 
