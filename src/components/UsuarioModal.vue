@@ -37,8 +37,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   cerrar: []
   guardar: [datos: UsuarioFormulario & {
-    password?: string
-  }]
+  password?: string
+  enviarCorreo?: boolean
+}]
 }>()
 
 // =============================================
@@ -50,8 +51,10 @@ const formulario = reactive({
   nombre: '',
   correo: '',
   password: '',
+  confirmarPassword: '',
   rolId: 0,
-  activo: true
+  activo: true,
+ notificacion: 'ninguna' as 'ninguna' | 'correo'
 })
 
 // Limpiar el formulario o cargar el usuario
@@ -64,7 +67,7 @@ watch(
     formulario.usuarioId = props.usuario?.usuarioId
     formulario.nombre = props.usuario?.nombre ?? ''
     formulario.correo = props.usuario?.correo ?? ''
-    formulario.password = ''
+    formulario.confirmarPassword = ''
     formulario.rolId = props.usuario?.rolId ?? 0
     formulario.activo = props.usuario?.activo ?? true
   },
@@ -76,6 +79,20 @@ watch(
 // =============================================
 
 function guardar() {
+
+      // Validar la nueva contraseña cuando se proporciona.
+    if (formulario.password) {
+      if (formulario.password.length < 8) {
+        alert('La contraseña debe tener al menos 8 caracteres.')
+        return
+      }
+
+      if (formulario.password !== formulario.confirmarPassword) {
+        alert('Las contraseñas no coinciden.')
+        return
+      }
+    }
+
   const nombre = formulario.nombre.trim()
   const correo = formulario.correo.trim()
 
@@ -113,19 +130,23 @@ function guardar() {
   // El cambio de contraseña se implementará
   // con su propio endpoint del backend.
   // Por eso no permitimos cambiarla al editar.
-  const datos: UsuarioFormulario & {
-    password?: string
-  } = {
-    usuarioId: formulario.usuarioId,
-    nombre,
-    correo,
-    rolId: formulario.rolId,
-    activo: formulario.activo
-  }
+   const datos: UsuarioFormulario & {
+          password?: string
+          enviarCorreo?: boolean} = {
+          usuarioId: formulario.usuarioId,
+          nombre,
+          correo,
+          rolId: formulario.rolId,
+          activo: formulario.activo,
+          enviarCorreo:
+            formulario.notificacion === 'correo' &&
+            (formulario.usuarioId === undefined || !!formulario.password)
+        }
 
-  if (formulario.usuarioId === undefined) {
-    datos.password = formulario.password
-  }
+  // Enviar la contraseña únicamente cuando se proporciona.
+    if (formulario.password) {
+      datos.password = formulario.password
+    }
 
   emit('guardar', datos)
 }
@@ -193,27 +214,45 @@ function cerrar() {
           />
         </div>
 
-        <div v-if="!usuario" class="form-group">
-          <label for="usuario-password">Contraseña *</label>
+        <!-- Nueva contraseña: obligatoria al crear, opcional al editar -->
+        <div class="form-group">
+          <label for="usuario-password">
+            {{ usuario ? 'Nueva contraseña (opcional)' : 'Contraseña *' }}
+          </label>
+
           <input
             id="usuario-password"
             v-model="formulario.password"
             type="password"
             autocomplete="new-password"
-            placeholder="Ingrese una contraseña"
-            required
+            minlength="8"
+            :required="!usuario"
+            :placeholder="usuario
+              ? 'Dejar vacío para conservar la contraseña'
+              : 'Ingrese una contraseña'"
           />
+
           <small>
-            La contraseña será procesada de forma segura por el backend.
+            {{ usuario
+              ? 'Complete este campo solamente si desea cambiar la contraseña.'
+              : 'La contraseña debe tener al menos 8 caracteres.' }}
           </small>
         </div>
 
-        <div v-else class="info-message">
-          <span>ⓘ</span>
-          <p>
-            La contraseña no se modifica desde este formulario.
-            Posteriormente implementaremos su cambio seguro.
-          </p>
+        <!-- Confirmación de contraseña -->
+        <div class="form-group">
+          <label for="usuario-confirmar-password">
+            Confirmar contraseña
+          </label>
+
+          <input
+            id="usuario-confirmar-password"
+            v-model="formulario.confirmarPassword"
+            type="password"
+            autocomplete="new-password"
+            :required="!usuario || !!formulario.password"
+            placeholder="Repita la contraseña"
+          />
         </div>
 
         <div class="form-group">
@@ -253,6 +292,28 @@ function cerrar() {
             cuando integremos la autenticación real.
           </small>
         </div>
+        <!-- Notificación de credenciales -->
+          <div
+            v-if="!usuario || formulario.password"
+            class="form-group"
+          >
+            <label>Notificación de credenciales</label>
+
+            <label class="checkbox-container">
+              <input
+                type="checkbox"
+                :checked="formulario.notificacion === 'correo'"
+                @change="formulario.notificacion =
+                  ($event.target as HTMLInputElement).checked ? 'correo' : 'ninguna'"
+              />
+
+              <span>Enviar usuario y contraseña por correo</span>
+            </label>
+
+            <small>
+              Se enviarán las credenciales al correo electrónico del usuario.
+            </small>
+          </div>
       </form>
 
       <!-- Pie fijo -->

@@ -90,13 +90,15 @@ const router = createRouter({
           component: PagosView,
         },
 
-        {
-  // Módulo de administración de usuarios.
-  // Permite gestionar usuarios y sus roles.
-  path: 'usuarios',
-  name: 'usuarios',
-  component: UsuariosView,
-},
+              {
+        // Módulo exclusivo del Administrador General.
+        path: 'usuarios',
+        name: 'usuarios',
+        component: UsuariosView,
+
+        // Restringe el acceso a este rol.
+        meta: { requiereAdmin: true },
+      },
       ],
     },
     {
@@ -134,6 +136,39 @@ router.beforeEach((to) => {
   if (to.name === 'login' && token) {
     return { name: 'dashboard' }
   }
+
+  // =============================================
+// PROTEGER RUTAS EXCLUSIVAS DEL ADMINISTRADOR
+// =============================================
+
+// Verifica si la ruta requiere el rol Administrador General.
+const requiereAdmin = to.matched.some(
+  (ruta) => ruta.meta.requiereAdmin
+)
+
+if (requiereAdmin) {
+  // Recupera la información del usuario autenticado.
+  const datosSesion = sessionStorage.getItem('sicop_usuario')
+
+  let rolId: number | null = null
+
+  if (datosSesion) {
+    try {
+      const usuario = JSON.parse(datosSesion) as {
+        rolId?: number
+      }
+
+      rolId = usuario.rolId ?? null
+    } catch {
+      rolId = null
+    }
+  }
+
+  // Si no es Administrador General, bloquear el acceso.
+  if (rolId !== 1) {
+    return { name: 'dashboard' }
+  }
+}
 
   // Permite continuar hacia la ruta solicitada.
   return true

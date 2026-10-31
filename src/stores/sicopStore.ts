@@ -263,12 +263,15 @@ export function formatoFecha(fecha: string): string {
 // =============================================
 
 // Calcular cuánto se ha pagado de una factura.
+// No se incluyen los pagos anulados.
 export function obtenerMontoPagado(
   facturaCompraId: number
 ): number {
   const totalPagado = pagos.value
     .filter(
-      pago => pago.facturaCompraId === facturaCompraId
+      pago =>
+        pago.facturaCompraId === facturaCompraId &&
+        !pago.anulado
     )
     .reduce(
       (suma, pago) => suma + pago.monto,

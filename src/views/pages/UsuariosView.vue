@@ -1,7 +1,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { apiGet } from '@/services/api'
+import { apiGet, apiPost, apiPut, apiPatch } from '@/services/api'
 import UsuarioModal from '../../components/UsuarioModal.vue'
 
 // ============================================
@@ -32,6 +32,7 @@ interface DatosUsuario {
   rolId: number
   activo: boolean
   password?: string
+  enviarCorreo?: boolean
 }
 
 // ============================================
@@ -85,6 +86,17 @@ onMounted(async () => {
 const busqueda = ref('')
 const mostrarModal = ref(false)
 const usuarioSeleccionado = ref<Usuario | null>(null)
+
+  // ============================================
+// MODALES DE ACTIVACIÓN Y DESACTIVACIÓN
+// ============================================
+
+const mostrarModalConfirmacion = ref(false)
+const mostrarModalAviso = ref(false)
+
+const usuarioParaCambiarEstado = ref<Usuario | null>(null)
+const mensajeAviso = ref('')
+const procesandoEstado = ref(false)
 
 // ============================================
 // PROPIEDADES CALCULADAS
@@ -158,82 +170,205 @@ function cerrarModal() {
 // GUARDAR USUARIO
 // ============================================
 
-function guardarUsuario(datos: DatosUsuario) {
-  const correoNormalizado = datos.correo.trim().toLowerCase()
+// ============================================
+// GUARDAR USUARIO EN SQL SERVER
+// ============================================
 
-  // Evita registrar correos duplicados.
-  const correoExistente = usuarios.value.some(usuario =>
-    usuario.correo.toLowerCase() === correoNormalizado &&
-    usuario.usuarioId !== datos.usuarioId
-  )
+async function guardarUsuario(datos: DatosUsuario): Promise<void> {
 
-  if (correoExistente) {
-    alert('Ya existe un usuario registrado con este correo.')
-    return
-  }
+  // EDITAR USUARIO EN SQL SERVER
+if (datos.usuarioId !== undefined) {
+  try {
+    // Preparar únicamente los campos permitidos.
+    const usuarioActualizado = {
+      nombre: datos.nombre.trim(),
+      correo: datos.correo.trim().toLowerCase(),
+      rolId: datos.rolId
+    }
 
-  // EDITAR USUARIO
-  if (datos.usuarioId !== undefined) {
-    const indice = usuarios.value.findIndex(
-      usuario => usuario.usuarioId === datos.usuarioId
+    // Actualizar el usuario en el backend.
+    await apiPut<void>(
+      `/api/Usuarios/${datos.usuarioId}`,
+      usuarioActualizado
     )
 
-    if (indice === -1) {
-      alert('No se encontró el usuario seleccionado.')
+    // Cambiar la contraseña solamente si el administrador ingresó una nueva.
+    if (datos.password) {
+      await apiPatch(
+        `/api/Usuarios/${datos.usuarioId}/cambiar-password?notificarCorreo=${datos.enviarCorreo === true}`,
+        {
+          nuevaPassword: datos.password
+        }
+      )
+    }
+
+    // Consultar nuevamente los usuarios reales.
+    await cargarUsuarios()
+
+    // Cerrar el formulario después de actualizar.
+    cerrarModal()
+
+  } catch (error) {
+    console.error('Error al editar usuario:', error)
+
+    const mensaje = error instanceof Error
+      ? error.message
+      : 'No fue posible actualizar el usuario.'
+
+    if (mensaje.includes('409')) {
+      alert('Ya existe otro usuario registrado con ese correo electrónico.')
+    } else {
+      alert(mensaje)
+    }
+  }
+
+  return
+}
+
+  try {
+    // Validar que el formulario incluya una contraseña.
+    if (!datos.password?.trim()) {
+      alert('Debe ingresar una contraseña.')
       return
     }
 
-    usuarios.value[indice] = {
-      usuarioId: datos.usuarioId,
-      nombre: datos.nombre,
-      correo: correoNormalizado,
-      rolId: datos.rolId,
-      activo: datos.activo
+    // Preparar los datos que recibe CrearUsuarioDto.
+    const nuevoUsuario = {
+      nombre: datos.nombre.trim(),
+      correo: datos.correo.trim().toLowerCase(),
+      password: datos.password,
+      rolId: datos.rolId
     }
 
+   // Registrar el usuario mediante el backend.
+    // Envía las credenciales por correo solo si se seleccionó la opción.
+    await apiPost<Usuario>(
+      `/api/Usuarios?notificarCorreo=${datos.enviarCorreo === true}`,
+      nuevoUsuario
+    )
+
+    // Actualizar la tabla con los usuarios reales.
+    await cargarUsuarios()
+
+    // Cerrar el formulario después de guardar.
     cerrarModal()
-    return
+
+  } catch (error) {
+    console.error('Error al registrar usuario:', error)
+
+    const mensaje = error instanceof Error
+      ? error.message
+      : 'No fue posible registrar el usuario.'
+
+    if (mensaje.includes('409')) {
+      alert('Ya existe un usuario registrado con ese correo electrónico.')
+    } else {
+      alert(mensaje)
+    }
   }
-
-  // REGISTRAR USUARIO
-  // En esta etapa solo simulamos el registro.
-  // La contraseña no se guarda en la lista ni
-  // en almacenamiento local.
-  if (!datos.password) {
-    alert('Debe ingresar una contraseña.')
-    return
-  }
-
-  const nuevoId =
-    Math.max(0, ...usuarios.value.map(usuario => usuario.usuarioId)) + 1
-
-  usuarios.value.push({
-    usuarioId: nuevoId,
-    nombre: datos.nombre,
-    correo: correoNormalizado,
-    rolId: datos.rolId,
-    activo: datos.activo
-  })
-
-  cerrarModal()
 }
 
 // ============================================
-// ACTIVAR / DESACTIVAR USUARIO
+// ABRIR MODAL DE CONFIRMACIÓN
 // ============================================
 
-function cambiarEstado(usuario: Usuario) {
-  const accion = usuario.activo ? 'desactivar' : 'activar'
+function cambiarEstado(usuario: Usuario): void {
 
-  const confirmado = confirm(
-    `¿Está seguro de que desea ${accion} a ${usuario.nombre}?`
-  )
+  // Identificar al usuario que inició sesión.
+  const sesion = sessionStorage.getItem('sicop_usuario')
 
-  if (!confirmado) return
+  let usuarioActualId: number | null = null
 
-  usuario.activo = !usuario.activo
+  if (sesion) {
+    try {
+      const usuarioActual = JSON.parse(sesion) as {
+        usuarioId?: number
+      }
+
+      usuarioActualId = Number(usuarioActual.usuarioId)
+
+    } catch {
+      usuarioActualId = null
+    }
+  }
+
+  // Impedir que un administrador se desactive a sí mismo.
+  if (usuario.activo && usuario.usuarioId === usuarioActualId) {
+    mensajeAviso.value =
+      'No puedes desactivar tu propia cuenta. Por seguridad, esta acción debe realizarla otro Administrador General.'
+
+    mostrarModalAviso.value = true
+    return
+  }
+
+  // Preparar el usuario que se desea activar o desactivar.
+  usuarioParaCambiarEstado.value = { ...usuario }
+  mostrarModalConfirmacion.value = true
 }
+
+// ============================================
+// CERRAR MODALES
+// ============================================
+
+function cerrarModalConfirmacion(): void {
+  if (procesandoEstado.value) return
+
+  mostrarModalConfirmacion.value = false
+  usuarioParaCambiarEstado.value = null
+}
+
+function cerrarModalAviso(): void {
+  mostrarModalAviso.value = false
+  mensajeAviso.value = ''
+}
+
+// ============================================
+// CONFIRMAR CAMBIO DE ESTADO EN SQL SERVER
+// ============================================
+
+async function confirmarCambioEstado(): Promise<void> {
+
+  const usuario = usuarioParaCambiarEstado.value
+
+  if (!usuario || procesandoEstado.value) return
+
+  procesandoEstado.value = true
+
+  try {
+    // Seleccionar el endpoint correspondiente.
+    const endpoint = usuario.activo
+      ? `/api/Usuarios/${usuario.usuarioId}/desactivar`
+      : `/api/Usuarios/${usuario.usuarioId}/activar`
+
+    // Actualizar el estado en SQL Server.
+    await apiPatch(endpoint)
+
+    // Actualizar la tabla.
+    await cargarUsuarios()
+
+    mostrarModalConfirmacion.value = false
+    usuarioParaCambiarEstado.value = null
+
+  } catch (error) {
+    console.error('Error al cambiar estado del usuario:', error)
+
+    mensajeAviso.value = error instanceof Error
+      ? error.message
+      : 'No fue posible actualizar el estado del usuario.'
+
+    mostrarModalConfirmacion.value = false
+    usuarioParaCambiarEstado.value = null
+    mostrarModalAviso.value = true
+
+  } finally {
+    procesandoEstado.value = false
+  }
+}
+
+
 </script>
+
+
 
 <template>
   <div class="usuarios-page">
@@ -414,6 +549,100 @@ function cambiarEstado(usuario: Usuario) {
       @cerrar="cerrarModal"
       @guardar="guardarUsuario"
     />
+
+    <!-- ============================================
+     MODAL 1: CONFIRMAR ACTIVACIÓN/DESACTIVACIÓN
+============================================ -->
+<div
+  v-if="mostrarModalConfirmacion && usuarioParaCambiarEstado"
+  class="usuario-dialog-overlay"
+  @click.self="cerrarModalConfirmacion"
+>
+  <section
+    class="usuario-dialog"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="titulo-confirmacion-usuario"
+  >
+    <div class="usuario-dialog-icon">?</div>
+
+    <h2 id="titulo-confirmacion-usuario">
+      {{ usuarioParaCambiarEstado.activo
+        ? 'Desactivar usuario'
+        : 'Activar usuario' }}
+    </h2>
+
+    <p>
+      ¿Estás seguro de que deseas
+      {{ usuarioParaCambiarEstado.activo ? 'desactivar' : 'activar' }}
+      a <strong>{{ usuarioParaCambiarEstado.nombre }}</strong>?
+    </p>
+
+    <p class="usuario-dialog-detail">
+      {{ usuarioParaCambiarEstado.activo
+        ? 'El usuario no podrá iniciar sesión hasta que vuelva a ser activado.'
+        : 'El usuario podrá iniciar sesión nuevamente con sus credenciales.' }}
+    </p>
+
+    <div class="usuario-dialog-actions">
+      <button
+        type="button"
+        class="usuario-dialog-cancel"
+        :disabled="procesandoEstado"
+        @click="cerrarModalConfirmacion"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="usuario-dialog-primary"
+        :disabled="procesandoEstado"
+        @click="confirmarCambioEstado"
+      >
+        {{ procesandoEstado
+          ? 'Procesando...'
+          : usuarioParaCambiarEstado.activo
+            ? 'Desactivar usuario'
+            : 'Activar usuario' }}
+      </button>
+    </div>
+  </section>
+</div>
+
+<!-- ============================================
+     MODAL 2: ACCIÓN NO PERMITIDA / AVISO
+============================================ -->
+<div
+  v-if="mostrarModalAviso"
+  class="usuario-dialog-overlay"
+  @click.self="cerrarModalAviso"
+>
+  <section
+    class="usuario-dialog"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="titulo-aviso-usuario"
+  >
+    <div class="usuario-dialog-icon">!</div>
+
+    <h2 id="titulo-aviso-usuario">
+      Acción no permitida
+    </h2>
+
+    <p>{{ mensajeAviso }}</p>
+
+    <div class="usuario-dialog-actions">
+      <button
+        type="button"
+        class="usuario-dialog-primary"
+        @click="cerrarModalAviso"
+      >
+        Entendido
+      </button>
+    </div>
+  </section>
+</div>
   </div>
 </template>
 
@@ -689,9 +918,18 @@ td {
   background: currentColor;
 }
 
+/* Centrar los botones de la columna Acciones */
 .actions {
   display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 8px;
+}
+
+/* Centrar el encabezado y las celdas de Acciones */
+table th:last-child,
+table td:last-child {
+  text-align: center;
 }
 
 .btn-edit,
@@ -760,6 +998,113 @@ td {
   .btn-primary {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ============================================
+   MODALES PERSONALIZADOS DE USUARIOS
+============================================ */
+
+.usuario-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(31, 19, 51, 0.58);
+  box-sizing: border-box;
+}
+
+.usuario-dialog {
+  width: 100%;
+  max-width: 450px;
+  padding: 32px;
+  border: 1px solid #eee6f5;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 20px 70px rgba(31, 19, 51, 0.25);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.usuario-dialog-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+  background: #f1e9fb;
+  color: #7950ae;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.usuario-dialog h2 {
+  margin: 0 0 14px;
+  color: #352057;
+  font-size: 22px;
+}
+
+.usuario-dialog p {
+  margin: 0 0 15px;
+  color: #665675;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.usuario-dialog-detail {
+  color: #9685a6 !important;
+  font-size: 12px !important;
+}
+
+.usuario-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.usuario-dialog-cancel,
+.usuario-dialog-primary {
+  padding: 12px 19px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.usuario-dialog-cancel {
+  border: 1px solid #e5d9f0;
+  background: #fff;
+  color: #7950ae;
+}
+
+.usuario-dialog-primary {
+  border: none;
+  background: #7950ae;
+  color: #fff;
+}
+
+.usuario-dialog-primary:hover {
+  background: #633e96;
+}
+
+.usuario-dialog-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .usuario-dialog {
+    padding: 24px 18px;
+  }
+
+  .usuario-dialog-actions {
+    flex-direction: column;
   }
 }
 </style>

@@ -19,13 +19,20 @@ const usuarioSesion = computed(() => {
 
   try {
     return JSON.parse(datos) as {
-      nombre: string
-      correo: string
+        usuarioId: number
+        nombre: string
+        correo: string
+        rolId: number
     }
   } catch {
     return null
   }
 })
+
+// Verifica si el usuario autenticado es Administrador General.
+const esAdministrador = computed(() =>
+  usuarioSesion.value?.rolId === 1
+)
 
 // Obtiene la inicial del nombre.
 const inicialUsuario = computed(() =>
@@ -89,11 +96,15 @@ async function cerrarSesion() {
         <span>Pagos</span>
       </RouterLink>
 
-      <!-- Módulo de administración de usuarios habilitado -->
-<RouterLink to="/usuarios" class="nav-item">
-  <span class="nav-icon">♧</span>
-  <span>Usuarios</span>
-</RouterLink>
+     <!-- Solo el Administrador General puede ver este módulo. -->
+      <RouterLink
+        v-if="esAdministrador"
+        to="/usuarios"
+        class="nav-item"
+      >
+        <span class="nav-icon">♧</span>
+        <span>Usuarios</span>
+      </RouterLink>
 
     </nav>
 

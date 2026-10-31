@@ -112,6 +112,27 @@ const saldoSeleccionado = computed(() =>
     : 0
 )
 
+// Total original de la factura seleccionada.
+const totalFacturaSeleccionada = computed(() =>
+  Number(facturaSeleccionada.value?.total ?? 0)
+)
+
+// Cuánto se ha abonado a la factura.
+const totalAbonadoFactura = computed(() =>
+  Math.max(
+    0,
+    totalFacturaSeleccionada.value - saldoSeleccionado.value
+  )
+)
+
+// Saldo que quedaría después del nuevo pago.
+const saldoDespuesPago = computed(() =>
+  Math.max(
+    0,
+    saldoSeleccionado.value - Number(formulario.value.monto || 0)
+  )
+)
+
 const pagosFiltrados = computed(() => {
   const texto = busqueda.value.trim().toLowerCase()
   return [...pagos.value]
@@ -379,18 +400,29 @@ async function anularPago(): Promise<void> {
                 </span>
               </td>
 
-              <td v-if="esAdministradorGeneral">
-                <button
-                  v-if="!pago.anulado"
-                  type="button"
-                  class="btn-secondary"
-                  @click="abrirModalAnulacion(pago.pagoId)"
-                >
-                  Anular
-                </button>
+              <!-- Columna de acciones centrada -->
+            <td
+              v-if="esAdministradorGeneral"
+              class="acciones-pago"
+            >
+              <!-- Botón para anular pagos vigentes -->
+              <button
+                v-if="!pago.anulado"
+                type="button"
+                class="btn-secondary"
+                @click="abrirModalAnulacion(pago.pagoId)"
+              >
+                ✕ Anular
+              </button>
 
-                <span v-else>—</span>
-              </td>
+              <!-- Etiqueta para pagos anulados -->
+              <span
+                v-else
+                class="pago-anulado-badge">
+                <span aria-hidden="true">⊗</span>
+                Anulado
+              </span>
+            </td>
             </tr>
             <tr v-if="pagosFiltrados.length === 0">
               <td :colspan="esAdministradorGeneral ? 10 : 9" class="empty-state">
@@ -427,10 +459,29 @@ async function anularPago(): Promise<void> {
             </select>
           </div>
 
-          <div v-if="facturaSeleccionada" class="saldo-box">
-            <span>Saldo disponible para pagar</span>
-            <strong>{{ formatoMoneda(saldoSeleccionado) }}</strong>
-          </div>
+          <!-- Resumen financiero de la factura seleccionada -->
+<div v-if="facturaSeleccionada" class="resumen-factura">
+  <h3>Resumen de la factura</h3>
+
+              <div class="resumen-valores">
+                <div>
+                  <span>Total de factura</span>
+                  <strong>{{ formatoMoneda(totalFacturaSeleccionada) }}</strong>
+                </div>
+
+                <div>
+                  <span>Ya abonado</span>
+                  <strong class="valor-abonado">
+                    {{ formatoMoneda(totalAbonadoFactura) }}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Saldo pendiente</span>
+                  <strong>{{ formatoMoneda(saldoSeleccionado) }}</strong>
+                </div>
+              </div>
+            </div>
 
           <div class="field-grid">
             <div class="field">
@@ -456,7 +507,14 @@ async function anularPago(): Promise<void> {
             </div>
             <input id="pago-monto" v-model.number="formulario.monto" type="number" min="0.01" step="0.01" :max="saldoSeleccionado || undefined" required />
           </div>
-
+            <!-- Vista previa del saldo después de registrar el pago -->
+            <div
+              v-if="facturaSeleccionada && Number(formulario.monto) > 0"
+              class="saldo-posterior"
+            >
+              <span>Saldo después del pago</span>
+              <strong>{{ formatoMoneda(saldoDespuesPago) }}</strong>
+            </div>
           <div class="field">
             <label for="pago-referencia">Número de referencia</label>
             <input id="pago-referencia" v-model="formulario.referencia" type="text" maxlength="100" placeholder="Ej. TRF-003" />
@@ -696,6 +754,114 @@ td { padding: 19px 18px; border-bottom: 1px solid #f0eaf6; color: #716080; font-
 
   .modal-anulacion-actions button {
     width: 100%;
+  }
+}
+
+/* ============================================
+   COLUMNA ACCIONES - PAGOS
+============================================ */
+
+/* Centrar el encabezado y los elementos */
+table th:last-child,
+table td.acciones-pago {
+  text-align: center;
+}
+
+/* Etiqueta para pagos anulados */
+.pago-anulado-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  padding: 8px 12px;
+  border-radius: 9px;
+
+  background: #fce8eb;
+  color: #b44960;
+
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ============================================
+   RESUMEN FINANCIERO DE LA FACTURA
+============================================ */
+
+.resumen-factura {
+  padding: 17px;
+  border: 1px solid #e7ddf2;
+  border-radius: 12px;
+  background: #f8f4fc;
+}
+
+.resumen-factura h3 {
+  margin: 0 0 15px;
+  color: #493078;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.resumen-valores {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.resumen-valores > div {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.resumen-valores span {
+  color: #917ca9;
+  font-size: 11px;
+}
+
+.resumen-valores strong {
+  color: #352057;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.resumen-valores .valor-abonado {
+  color: #247a43;
+}
+
+/* Saldo estimado después del abono */
+
+.saldo-posterior {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 17px;
+  border: 1px solid #e7ddf2;
+  border-radius: 10px;
+  background: #fcfaff;
+}
+
+.saldo-posterior span {
+  color: #72558f;
+  font-size: 13px;
+}
+
+.saldo-posterior strong {
+  color: #493078;
+  font-size: 17px;
+}
+
+@media (max-width: 480px) {
+  .resumen-valores {
+    grid-template-columns: 1fr;
+  }
+
+  .saldo-posterior {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

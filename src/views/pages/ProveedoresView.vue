@@ -691,12 +691,19 @@ async function cambiarEstadoProveedor() {
   white-space: nowrap;
 }
 
-/* Mantiene juntos los botones de acciones */
+/* Centrar los botones Editar, Activar y Desactivar */
 .actions-container {
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+}
+
+/* Centrar la última columna de la tabla */
+table th:last-child,
+table td:last-child {
+  text-align: center;
 }
 
 table {
