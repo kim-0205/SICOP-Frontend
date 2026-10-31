@@ -1,6 +1,6 @@
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { apiGet } from '../../services/api'
 
 // =============================================
@@ -50,6 +50,55 @@ const proveedores = ref<Proveedor[]>([])
 const proveedorId = ref<number | null>(null)
 
 const estadoCuenta = ref<EstadoCuentaRespuesta | null>(null)
+
+  // =============================================
+// PAGINACIÓN DE ESTADOS DE CUENTA
+// =============================================
+
+// Cantidad de movimientos por página.
+const registrosPorPagina = 5
+
+// Página actual.
+const paginaActual = ref(1)
+
+// Total de movimientos del proveedor seleccionado.
+const totalMovimientos = computed(() =>
+  estadoCuenta.value?.movimientos.length ?? 0
+)
+
+// Calcular el total de páginas.
+const totalPaginas = computed(() =>
+  Math.max(1, Math.ceil(totalMovimientos.value / registrosPorPagina))
+)
+
+// Obtener los movimientos de la página actual.
+const movimientosPaginados = computed(() => {
+  const inicio = (paginaActual.value - 1) * registrosPorPagina
+
+  return estadoCuenta.value?.movimientos.slice(
+    inicio,
+    inicio + registrosPorPagina
+  ) ?? []
+})
+
+// Cambiar de página.
+function cambiarPagina(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginas.value) {
+    paginaActual.value = pagina
+  }
+}
+
+// Regresar a la primera página al cambiar de proveedor.
+watch(proveedorId, () => {
+  paginaActual.value = 1
+})
+
+// Evitar permanecer en una página inexistente.
+watch(totalPaginas, (total) => {
+  if (paginaActual.value > total) {
+    paginaActual.value = total
+  }
+})
 
 const cargandoProveedores = ref(false)
 const cargandoEstadoCuenta = ref(false)
@@ -834,8 +883,8 @@ onMounted(cargarProveedores)
 
             <tbody>
               <tr
-                v-for="(movimiento, index) in estadoCuenta.movimientos"
-                :key="`${movimiento.tipoMovimiento}-${movimiento.facturaCompraId}-${movimiento.pagoId ?? index}`"
+                v-for="(movimiento, index) in movimientosPaginados"
+                :key="`${movimiento.tipoMovimiento}-${movimiento.facturaCompraId}-${movimiento.pagoId ?? ((paginaActual - 1) * registrosPorPagina + index)}`"
               >
                 <td>
                   {{ formatoFecha(movimiento.fecha) }}
@@ -902,6 +951,47 @@ onMounted(cargarProveedores)
             </tbody>
           </table>
         </div>
+
+        <!-- ====================================== -->
+<!-- PAGINACIÓN DE ESTADOS DE CUENTA        -->
+<!-- ====================================== -->
+
+<div
+  v-if="totalMovimientos > 0"
+  class="pagination-container"
+>
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, totalMovimientos) }}
+    de {{ totalMovimientos }} movimientos
+  </span>
+
+  <div class="pagination-buttons">
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
+
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+  </div>
+</div>
 
         <!-- Saldo final -->
         <div class="final-balance">
@@ -1334,6 +1424,69 @@ td {
     flex-direction: column;
     align-items: flex-end;
     gap: 8px;
+  }
+}
+/* =========================================
+   PAGINACIÓN DE ESTADOS DE CUENTA
+   ========================================= */
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #ebe3f5;
+}
+
+.pagination-info {
+  color: #826d99;
+  font-size: 13px;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagination-btn {
+  padding: 10px 16px;
+  border: 1px solid #e5d9f0;
+  border-radius: 9px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #e8d9f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-current {
+  color: #493078;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .pagination-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
 </style>
