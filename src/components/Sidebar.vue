@@ -1,15 +1,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
+import logoSicop from '../assets/logo-sicop.png'
 
 // SICOP - Menú lateral de navegación.
 // Módulos habilitados:
 // Dashboard, Proveedores, Facturas de compra,
-// Pagos y Usuarios.
-
-// Permite navegar hacia el Login.
-const router = useRouter()
+// Pagos, Estados de Cuenta y Usuarios.
 
 // Recupera los datos del usuario autenticado.
 const usuarioSesion = computed(() => {
@@ -19,45 +17,38 @@ const usuarioSesion = computed(() => {
 
   try {
     return JSON.parse(datos) as {
-        usuarioId: number
-        nombre: string
-        correo: string
-        rolId: number
+      usuarioId: number
+      nombre: string
+      correo: string
+      rolId: number
     }
   } catch {
     return null
   }
 })
 
-// Verifica si el usuario autenticado es Administrador General.
+// Solo el Administrador General puede ver el módulo Usuarios.
 const esAdministrador = computed(() =>
   usuarioSesion.value?.rolId === 1
 )
 
-// Obtiene la inicial del nombre.
-const inicialUsuario = computed(() =>
-  usuarioSesion.value?.nombre?.charAt(0).toUpperCase() || 'S'
-)
-
-// Cierra la sesión del usuario autenticado.
-async function cerrarSesion() {
-  // Elimina el token JWT almacenado.
-  sessionStorage.removeItem('sicop_token')
-
-  // Elimina la información del usuario autenticado.
-  sessionStorage.removeItem('sicop_usuario')
-
-  // Redirige al inicio de sesión.
-  await router.replace('/login')
-}
+// La información del usuario y el cierre de sesión
+// se administran desde Header.vue.
 </script>
+
 
 <template>
   <aside class="sidebar">
 
     <!-- Identidad del sistema -->
     <div class="sidebar-brand">
-      <div class="brand-icon">◆</div>
+     <div class="brand-icon">
+  <img
+    :src="logoSicop"
+    alt="Logo de SICOP"
+    class="logo-sicop"
+  />
+</div>
 
       <div>
         <h2>SICOP</h2>
@@ -97,38 +88,22 @@ async function cerrarSesion() {
       </RouterLink>
 
      <!-- Solo el Administrador General puede ver este módulo. -->
-      <RouterLink
-        v-if="esAdministrador"
-        to="/usuarios"
-        class="nav-item"
-      >
-        <span class="nav-icon">♧</span>
-        <span>Usuarios</span>
-      </RouterLink>
+<RouterLink
+  v-if="esAdministrador"
+  to="/usuarios"
+  class="nav-item"
+>
+  <span class="nav-icon">♧</span>
+  <span>Usuarios</span>
+</RouterLink>
+
+<!-- Consulta de estados de cuenta por proveedor -->
+<RouterLink to="/estados-cuenta" class="nav-item">
+  <span class="nav-icon">▥</span>
+  <span>Estados de Cuenta</span>
+</RouterLink>
 
     </nav>
-
-    <!-- Parte inferior -->
-    <div class="sidebar-footer">
-          <div class="user-info">
-            <div class="user-avatar">{{ inicialUsuario }}</div>
-
-            <div>
-              <strong>{{ usuarioSesion?.nombre || 'SICOP' }}</strong>
-              <small>{{ usuarioSesion?.correo || '' }}</small>
-            </div>
-          </div>
-
-          <!-- Cierra la sesión real del usuario. -->
-          <button
-            type="button"
-            class="logout-button"
-            @click="cerrarSesion"
-            >
-              <span>↪</span>
-              <span>Cerrar sesión</span>
-            </button>
-        </div>
 
   </aside>
 </template>
@@ -158,13 +133,21 @@ async function cerrarSesion() {
 }
 
 .brand-icon {
-  width: 44px;
-  height: 44px;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  font-size: 23px;
+}
+
+/* Logo oficial de SICOP */
+.logo-sicop {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .sidebar-brand h2 {
@@ -235,11 +218,6 @@ a.nav-item:hover {
   cursor: not-allowed;
 }
 
-/* Información inferior */
-.sidebar-footer {
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
 
 .user-info {
   display: flex;
