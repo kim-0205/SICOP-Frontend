@@ -100,6 +100,60 @@ const diasAlertaVencimiento = ref(5)
 
 // Estado de carga de la configuración.
 const cargandoConfiguracionAlertas = ref(false)
+// =============================================
+// PAGINACIÓN DEL DASHBOARD
+// =============================================
+
+// Cantidad de registros por página.
+const registrosPorPagina = 5
+
+// Página actual de cada sección.
+const paginaFacturas = ref(1)
+const paginaPagos = ref(1)
+
+// Total de páginas de facturas.
+const totalPaginasFacturas = computed(() =>
+  Math.max(1, Math.ceil(facturasRecientes.value.length / registrosPorPagina))
+)
+
+// Total de páginas de pagos.
+const totalPaginasPagos = computed(() =>
+  Math.max(1, Math.ceil(pagosRecientes.value.length / registrosPorPagina))
+)
+
+// Facturas visibles en la página actual.
+const facturasPaginadas = computed(() => {
+  const inicio = (paginaFacturas.value - 1) * registrosPorPagina
+
+  return facturasRecientes.value.slice(
+    inicio,
+    inicio + registrosPorPagina
+  )
+})
+
+// Pagos visibles en la página actual.
+const pagosPaginados = computed(() => {
+  const inicio = (paginaPagos.value - 1) * registrosPorPagina
+
+  return pagosRecientes.value.slice(
+    inicio,
+    inicio + registrosPorPagina
+  )
+})
+
+// Cambiar página de facturas.
+function cambiarPaginaFacturas(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginasFacturas.value) {
+    paginaFacturas.value = pagina
+  }
+}
+
+// Cambiar página de pagos.
+function cambiarPaginaPagos(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginasPagos.value) {
+    paginaPagos.value = pagina
+  }
+}
 
 // Estados de carga.
 const cargando = ref(true)
@@ -229,11 +283,10 @@ async function cargarFacturasRecientes() {
           new Date(b.fechaEmision).getTime() -
           new Date(a.fechaEmision).getTime()
 
-        return diferencia !== 0
-          ? diferencia
-          : b.facturaCompraId - a.facturaCompraId
+              return diferencia !== 0
+        ? diferencia
+        : b.facturaCompraId - a.facturaCompraId
       })
-      .slice(0, 5)
 
   } catch (err) {
     console.error(
@@ -269,11 +322,10 @@ async function cargarPagosRecientes() {
           new Date(b.fechaPago).getTime() -
           new Date(a.fechaPago).getTime()
 
-        return diferencia !== 0
+                return diferencia !== 0
           ? diferencia
           : b.pagoId - a.pagoId
       })
-      .slice(0, 5)
 
   } catch (err) {
     console.error(
@@ -872,7 +924,7 @@ onMounted(() => {
         <div v-else class="recent-list">
 
           <div
-            v-for="factura in facturasRecientes"
+            v-for="factura in facturasPaginadas"
             :key="factura.facturaCompraId"
             class="recent-item"
           >
@@ -906,6 +958,41 @@ onMounted(() => {
             </div>
           </div>
 
+        </div>
+
+        <!-- PAGINACIÓN DE FACTURAS: PEGAR AQUÍ -->
+        <div v-if="facturasRecientes.length > 0" class="pagination-container">
+          <span class="pagination-info">
+            Mostrando
+            {{ (paginaFacturas - 1) * registrosPorPagina + 1 }}
+            -
+            {{ Math.min(paginaFacturas * registrosPorPagina, facturasRecientes.length) }}
+            de {{ facturasRecientes.length }} facturas
+          </span>
+
+          <div class="pagination-buttons">
+            <button
+              type="button"
+              class="pagination-btn"
+              :disabled="paginaFacturas === 1"
+              @click="cambiarPaginaFacturas(paginaFacturas - 1)"
+            >
+              ‹ Anterior
+            </button>
+
+            <span class="pagination-current">
+              Página {{ paginaFacturas }} de {{ totalPaginasFacturas }}
+            </span>
+
+            <button
+              type="button"
+              class="pagination-btn"
+              :disabled="paginaFacturas === totalPaginasFacturas"
+              @click="cambiarPaginaFacturas(paginaFacturas + 1)"
+            >
+              Siguiente ›
+            </button>
+          </div>
         </div>
 
       </article>
@@ -955,7 +1042,7 @@ onMounted(() => {
         <div v-else class="recent-list">
 
           <div
-            v-for="pago in pagosRecientes"
+            v-for="pago in pagosPaginados"
             :key="pago.pagoId"
             class="recent-item"
           >
@@ -988,7 +1075,42 @@ onMounted(() => {
               >
                 {{ pago.anulado ? 'Anulado' : 'Válido' }}
               </span>
-            </div>
+                      </div>
+          </div>
+        </div>
+
+        <!-- PAGINACIÓN DE PAGOS: PEGAR AQUÍ -->
+        <div v-if="pagosRecientes.length > 0" class="pagination-container">
+          <span class="pagination-info">
+            Mostrando
+            {{ (paginaPagos - 1) * registrosPorPagina + 1 }}
+            -
+            {{ Math.min(paginaPagos * registrosPorPagina, pagosRecientes.length) }}
+            de {{ pagosRecientes.length }} pagos
+          </span>
+
+          <div class="pagination-buttons">
+            <button
+              type="button"
+              class="pagination-btn"
+              :disabled="paginaPagos === 1"
+              @click="cambiarPaginaPagos(paginaPagos - 1)"
+            >
+              ‹ Anterior
+            </button>
+
+            <span class="pagination-current">
+              Página {{ paginaPagos }} de {{ totalPaginasPagos }}
+            </span>
+
+            <button
+              type="button"
+              class="pagination-btn"
+              :disabled="paginaPagos === totalPaginasPagos"
+              @click="cambiarPaginaPagos(paginaPagos + 1)"
+            >
+              Siguiente ›
+            </button>
           </div>
 
         </div>
@@ -1588,5 +1710,57 @@ onMounted(() => {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+/* =========================================
+   PAGINACIÓN DEL DASHBOARD
+   ========================================= */
+
+.pagination-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #ebe3f5;
+}
+
+.pagination-info {
+  color: #826d99;
+  font-size: 12px;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pagination-btn {
+  padding: 9px 12px;
+  border: 1px solid #e5d9f0;
+  border-radius: 9px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #e8d9f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-current {
+  color: #493078;
+  font-size: 12px;
+  font-weight: 600;
 }
 </style>

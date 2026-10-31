@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 
 // Importamos el formulario de proveedores.
 import ProveedorModal from '../../components/ProveedorModal.vue'
@@ -88,6 +88,52 @@ const proveedoresFiltrados = computed(() => {
     )
   })
 })
+
+   // =============================================
+// PAGINACIÓN DE PROVEEDORES
+// =============================================
+
+// Cantidad de proveedores que se mostrarán por página.
+const registrosPorPagina = 5
+
+// Página seleccionada actualmente.
+const paginaActual = ref(1)
+
+// Total de páginas según los resultados del buscador.
+const totalPaginas = computed(() =>
+  Math.max(1, Math.ceil(proveedoresFiltrados.value.length / registrosPorPagina))
+)
+
+// Registros correspondientes a la página actual.
+const proveedoresPaginados = computed(() => {
+  const inicio = (paginaActual.value - 1) * registrosPorPagina
+
+  return proveedoresFiltrados.value.slice(
+    inicio,
+    inicio + registrosPorPagina
+  )
+})
+
+// Cambiar de página sin salir del rango permitido.
+function cambiarPagina(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginas.value) {
+    paginaActual.value = pagina
+  }
+}
+
+// Volver a la primera página cuando cambia la búsqueda.
+watch(busqueda, () => {
+  paginaActual.value = 1
+})
+
+// Evitar páginas vacías cuando disminuye la cantidad de registros.
+watch(totalPaginas, (total) => {
+  if (paginaActual.value > total) {
+    paginaActual.value = total
+  }
+})
+
+
 
 // --------------------------------------------------
 // CONTROL DEL FORMULARIO MODAL
@@ -325,7 +371,7 @@ async function cambiarEstadoProveedor() {
           <!-- Registros -->
           <tbody>
             <tr
-              v-for="proveedor in proveedoresFiltrados"
+              v-for="proveedor in proveedoresPaginados"
               :key="proveedor.proveedorId"
             >
 
@@ -426,6 +472,50 @@ async function cambiarEstadoProveedor() {
 
         </table>
       </div>
+      <!-- ====================================== -->
+<!-- PAGINACIÓN DE PROVEEDORES              -->
+<!-- ====================================== -->
+
+<div
+  v-if="proveedoresFiltrados.length > 0"
+  class="pagination-container"
+>
+  <!-- Cantidad de registros mostrados -->
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, proveedoresFiltrados.length) }}
+    de {{ proveedoresFiltrados.length }} proveedores
+  </span>
+
+  <!-- Controles de navegación -->
+  <div class="pagination-buttons">
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
+
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+
+  </div>
+</div>
 
     </section>
 
@@ -981,4 +1071,67 @@ td {
   }
 }
 
+/* =========================================
+   PAGINACIÓN DE PROVEEDORES
+   ========================================= */
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #ebe3f5;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #826d99;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagination-btn {
+  padding: 10px 16px;
+  border: 1px solid #e5d9f0;
+  border-radius: 9px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #e8d9f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-current {
+  font-size: 13px;
+  font-weight: 600;
+  color: #493078;
+}
+
+@media (max-width: 600px) {
+  .pagination-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
 </style>

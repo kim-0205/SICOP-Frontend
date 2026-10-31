@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 // Servicios para registrar pagos en ASP.NET Core.
 import { apiPost, apiPut } from '@/services/api'
 
@@ -148,6 +148,50 @@ const pagosFiltrados = computed(() => {
       ].join(' ').toLowerCase()
       return contenido.includes(texto)
     })
+})
+
+// =============================================
+// PAGINACIÓN DEL HISTORIAL DE PAGOS
+// =============================================
+
+// Cantidad de pagos que se mostrarán por página.
+const registrosPorPagina = 5
+
+// Página seleccionada actualmente.
+const paginaActual = ref(1)
+
+// Calcular cuántas páginas existen.
+const totalPaginas = computed(() =>
+  Math.max(1, Math.ceil(pagosFiltrados.value.length / registrosPorPagina))
+)
+
+// Obtener únicamente los pagos correspondientes a la página actual.
+const pagosPaginados = computed(() => {
+  const inicio = (paginaActual.value - 1) * registrosPorPagina
+
+  return pagosFiltrados.value.slice(
+    inicio,
+    inicio + registrosPorPagina
+  )
+})
+
+// Permitir navegar entre páginas.
+function cambiarPagina(pagina: number) {
+  if (pagina >= 1 && pagina <= totalPaginas.value) {
+    paginaActual.value = pagina
+  }
+}
+
+// Regresar a la primera página al realizar una búsqueda.
+watch(busqueda, () => {
+  paginaActual.value = 1
+})
+
+// Evitar permanecer en una página que ya no existe.
+watch(totalPaginas, (total) => {
+  if (paginaActual.value > total) {
+    paginaActual.value = total
+  }
 })
 
 // Sumar únicamente los pagos vigentes.
@@ -385,7 +429,7 @@ async function anularPago(): Promise<void> {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="pago in pagosFiltrados" :key="pago.pagoId">
+            <tr v-for="pago in pagosPaginados" :key="pago.pagoId">
               <td>#{{ pago.pagoId }}</td>
               <td class="invoice-number">{{ nombreFactura(pago.facturaCompraId) }}</td>
               <td class="provider-name">{{ nombreProveedor(pago.facturaCompraId) }}</td>
@@ -434,6 +478,50 @@ async function anularPago(): Promise<void> {
           </tbody>
         </table>
       </div>
+      <!-- ====================================== -->
+<!-- PAGINACIÓN DEL HISTORIAL DE PAGOS      -->
+<!-- ====================================== -->
+
+<div
+  v-if="pagosFiltrados.length > 0"
+  class="pagination-container"
+>
+  <!-- Cantidad de registros mostrados -->
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, pagosFiltrados.length) }}
+    de {{ pagosFiltrados.length }} pagos
+  </span>
+
+  <!-- Botones para navegar -->
+  <div class="pagination-buttons">
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
+
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+
+  </div>
+</div>
     </section>
 
     <!-- Formulario de registro. Se integra en esta vista para no alterar otros componentes. -->
@@ -862,6 +950,69 @@ table td.acciones-pago {
   .saldo-posterior {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+/* =========================================
+   PAGINACIÓN DEL HISTORIAL DE PAGOS
+   ========================================= */
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #ebe3f5;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #826d99;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagination-btn {
+  padding: 10px 16px;
+  border: 1px solid #e5d9f0;
+  border-radius: 9px;
+  background: #f3ecfa;
+  color: #7950ae;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #e8d9f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-current {
+  font-size: 13px;
+  font-weight: 600;
+  color: #493078;
+}
+
+@media (max-width: 600px) {
+  .pagination-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
 </style>

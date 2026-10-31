@@ -112,6 +112,7 @@ const esAdministrador = computed(() =>
   <span class="nav-icon">⚙</span>
   <span>Parámetros del Sistema</span>
 </RouterLink>
+
     </nav>
 
   </aside>
