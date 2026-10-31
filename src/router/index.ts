@@ -27,6 +27,9 @@ import UsuariosView from '../views/pages/UsuariosView.vue'
 // Pantalla para probar la conexión con el backend.
 import PruebaConexionView from '../views/pages/PruebaConexionView.vue'
 
+// Módulo de Estados de Cuenta por proveedor.
+import EstadosCuentaView from '../views/pages/EstadosCuentaView.vue'
+
 // =============================================
 // IMPORTACIÓN DEL DISEÑO ADMINISTRATIVO
 // =============================================
@@ -90,13 +93,22 @@ const router = createRouter({
           component: PagosView,
         },
 
+
         {
+  // Consulta de estados de cuenta por proveedor.
+  path: 'estados-cuenta',
+  name: 'estados-cuenta',
+  component: EstadosCuentaView,
+},
+{
   // Módulo de administración de usuarios.
   // Permite gestionar usuarios y sus roles.
   path: 'usuarios',
   name: 'usuarios',
   component: UsuariosView,
 },
+
+
       ],
     },
     {

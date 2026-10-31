@@ -1,10 +1,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
-// Obtenemos la ruta actual del sistema.
+// Obtenemos la ruta actual y el router del sistema.
 const route = useRoute()
+const router = useRouter()
 
 // Estructura de los datos del usuario autenticado.
 interface UsuarioSesion {
@@ -39,6 +40,7 @@ const titulo = computed(() => {
     proveedores: 'Proveedores',
     facturas: 'Facturas de compra',
     pagos: 'Pagos',
+    'estados-cuenta': 'Estados de Cuenta',
     usuarios: 'Usuarios',
   }
 
@@ -53,6 +55,18 @@ const fechaActual = computed(() =>
     year: 'numeric',
   }).format(new Date()),
 )
+
+// Cierra la sesión del usuario autenticado.
+async function cerrarSesion() {
+  // Elimina el token JWT.
+  sessionStorage.removeItem('sicop_token')
+
+  // Elimina los datos del usuario.
+  sessionStorage.removeItem('sicop_usuario')
+
+  // Regresa a la pantalla de inicio de sesión.
+  await router.replace('/login')
+}
 </script>
 
 <template>
@@ -79,15 +93,42 @@ const fechaActual = computed(() =>
 
       <div class="topbar-divider"></div>
 
+      <!-- Usuario autenticado -->
       <div class="topbar-user">
-              <div class="user-avatar">{{ inicialUsuario }}</div>
+        <div class="user-avatar">{{ inicialUsuario }}</div>
 
-              <div class="user-info">
-                <strong>{{ usuarioSesion?.nombre || 'SICOP' }}</strong>
-                <span>{{ usuarioSesion?.correo || '' }}</span>
-              </div>
-            </div>
+        <div class="user-info">
+          <strong>{{ usuarioSesion?.nombre || 'SICOP' }}</strong>
+          <span>{{ usuarioSesion?.correo || '' }}</span>
+        </div>
       </div>
+
+      <!-- Botón de cerrar sesión -->
+      <button
+        type="button"
+        class="logout-button"
+        title="Cerrar sesión"
+        aria-label="Cerrar sesión"
+        @click="cerrarSesion"
+      >
+        <!-- Símbolo de encendido -->
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="25"
+          height="25"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 2v10" />
+          <path d="M18.36 6.64a9 9 0 1 1-12.72 0" />
+        </svg>
+      </button>
+    </div>
 
   </header>
 </template>
@@ -187,6 +228,34 @@ h2 {
   color: #9a87ae;
 }
 
+/* Botón morado para cerrar sesión */
+.logout-button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5d7f3;
+  border-radius: 12px;
+  background: #f0e8f8;
+  color: #7551a7;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+/* Efecto al pasar el cursor */
+.logout-button:hover {
+  background: #7551a7;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Accesibilidad mediante teclado */
+.logout-button:focus-visible {
+  outline: 3px solid #b79ad9;
+  outline-offset: 3px;
+}
+
 @media (max-width: 768px) {
   .topbar {
     padding: 16px 20px;
@@ -196,10 +265,15 @@ h2 {
   .topbar-right {
     width: 100%;
     justify-content: space-between;
+    gap: 12px;
   }
 
   .topbar-date {
     font-size: 11px;
+  }
+
+  .user-info span {
+    overflow-wrap: anywhere;
   }
 
   h2 {
