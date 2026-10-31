@@ -103,6 +103,15 @@ const esAdministrador = computed(() =>
   <span>Estados de Cuenta</span>
 </RouterLink>
 
+<!-- Visible únicamente para el Administrador General -->
+<RouterLink
+  v-if="esAdministrador"
+  to="/parametros-sistema"
+  class="nav-item"
+>
+  <span class="nav-icon">⚙</span>
+  <span>Parámetros del Sistema</span>
+</RouterLink>
     </nav>
 
   </aside>
