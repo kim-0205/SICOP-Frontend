@@ -215,10 +215,10 @@ function cerrarModal() {
     ? error.message
     : 'No fue posible registrar la factura.'
 
-  // Mostrar un mensaje claro cuando la factura ya existe.
+  // Mostrar un mensaje cuando el número de factura ya existe en SICOP.
   if (mensaje.includes('409')) {
     mensajeErrorFactura.value =
-      'Ya existe una factura con este número para el proveedor seleccionado. Verifica el número e inténtalo nuevamente.'
+      'Ya existe una factura registrada con este número en SICOP. No se permiten números de factura duplicados.'
   } else {
     // Conservar el mensaje original para otros errores.
     mensajeErrorFactura.value = mensaje
@@ -317,7 +317,7 @@ function claseEstado(factura: FacturaCompra): string {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
+              <th>No.</th>
               <th>No. factura</th>
               <th>Proveedor</th>
               <th>Emisión</th>
@@ -329,8 +329,10 @@ function claseEstado(factura: FacturaCompra): string {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="factura in facturasFiltradas" :key="factura.facturaCompraId">
-              <td>#{{ factura.facturaCompraId }}</td>
+            <!-- Mostrar un correlativo visual según el orden de las facturas -->
+            <tr
+              v-for="(factura, index) in facturasFiltradas":key="factura.facturaCompraId">
+              <td>{{ index + 1 }}</td>
               <td class="invoice-number">{{ factura.numeroFactura }}</td>
               <td class="provider-name">{{ factura.nombreProveedor }}</td>
               <td>{{ formatoFecha(factura.fechaEmision) }}</td>
@@ -338,22 +340,29 @@ function claseEstado(factura: FacturaCompra): string {
               <td class="money-cell">{{ formatoMoneda(factura.total) }}</td>
               <td class="money-cell">{{ formatoMoneda(factura.saldoPendiente) }}</td>
               <td><span class="status-badge" :class="claseEstado(factura)">{{ obtenerEstado(factura) }}</span></td>
-              <td>
-                <!-- Solo el administrador puede anular facturas activas. -->
-                <button
-                  v-if="esAdministradorGeneral && !factura.anulada"
-                  type="button"
-                  class="btn-edit"
-                  @click="confirmarAnulacion(factura)"
-                >
-                  ✕ Anular
-                </button>
+              <!-- Columna de acciones centrada -->
+<td class="acciones-factura">
 
-                <!-- Identificar las facturas que ya fueron anuladas. -->
-                <span v-else-if="factura.anulada">
-                  Anulada
-                </span>
-              </td>
+              <!-- Botón para anular facturas activas -->
+              <button
+                v-if="esAdministradorGeneral && !factura.anulada"
+                type="button"
+                class="btn-edit"
+                @click="confirmarAnulacion(factura)"
+              >
+                ✕ Anular
+              </button>
+
+              <!-- Etiqueta para facturas anuladas -->
+              <span
+                v-else-if="factura.anulada"
+                class="factura-anulada-badge"
+              >
+                <span aria-hidden="true">⊗</span>
+                Anulada
+              </span>
+
+            </td>
             </tr>
             <tr v-if="facturasFiltradas.length === 0">
               <td colspan="9" class="empty-state">
@@ -805,5 +814,33 @@ td {
 
 .error-factura-button:hover {
   background: #633e96;
+}
+
+/* ============================================
+   COLUMNA ACCIONES - FACTURAS
+============================================ */
+
+/* Centrar encabezado y contenido */
+table th:last-child,
+table td.acciones-factura {
+  text-align: center;
+}
+
+/* Etiqueta para facturas anuladas */
+.factura-anulada-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  padding: 8px 12px;
+  border-radius: 9px;
+
+  background: #fce8eb;
+  color: #b44960;
+
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 </style>

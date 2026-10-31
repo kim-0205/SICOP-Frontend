@@ -1,4 +1,6 @@
+
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import logoSicop from '../assets/logo-sicop.png'
 
@@ -7,9 +9,33 @@ import logoSicop from '../assets/logo-sicop.png'
 // Dashboard, Proveedores, Facturas de compra,
 // Pagos, Estados de Cuenta y Usuarios.
 
+// Recupera los datos del usuario autenticado.
+const usuarioSesion = computed(() => {
+  const datos = sessionStorage.getItem('sicop_usuario')
+
+  if (!datos) return null
+
+  try {
+    return JSON.parse(datos) as {
+      usuarioId: number
+      nombre: string
+      correo: string
+      rolId: number
+    }
+  } catch {
+    return null
+  }
+})
+
+// Solo el Administrador General puede ver el módulo Usuarios.
+const esAdministrador = computed(() =>
+  usuarioSesion.value?.rolId === 1
+)
+
 // La información del usuario y el cierre de sesión
-// ahora se administran desde el Header.
+// se administran desde Header.vue.
 </script>
+
 
 <template>
   <aside class="sidebar">
@@ -61,18 +87,20 @@ import logoSicop from '../assets/logo-sicop.png'
         <span>Pagos</span>
       </RouterLink>
 
-      
+     <!-- Solo el Administrador General puede ver este módulo. -->
+<RouterLink
+  v-if="esAdministrador"
+  to="/usuarios"
+  class="nav-item"
+>
+  <span class="nav-icon">♧</span>
+  <span>Usuarios</span>
+</RouterLink>
+
 <!-- Consulta de estados de cuenta por proveedor -->
 <RouterLink to="/estados-cuenta" class="nav-item">
   <span class="nav-icon">▥</span>
   <span>Estados de Cuenta</span>
-</RouterLink>
-
-
-      <!-- Módulo de administración de usuarios habilitado -->
-<RouterLink to="/usuarios" class="nav-item">
-  <span class="nav-icon">♧</span>
-  <span>Usuarios</span>
 </RouterLink>
 
     </nav>
