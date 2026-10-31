@@ -17,8 +17,10 @@ import ProveedoresView from '../views/pages/ProveedoresView.vue'
 import FacturasView from '../views/pages/FacturasView.vue'
 
 // Módulo de pagos parciales y completos.
-// NUEVO: agregamos únicamente esta importación.
 import PagosView from '../views/pages/PagosView.vue'
+
+// Módulo de Parámetros del Sistema.
+import ParametrosSistemaView from '../views/pages/ParametrosSistemaView.vue'
 
 // Módulo de administración de usuarios.
 // Permite registrar, editar y administrar usuarios.
@@ -106,7 +108,16 @@ const router = createRouter({
           name: 'usuarios',
           component: UsuariosView,
 
-          // Restringe el acceso a este rol.
+          // Restringe el acceso a Usuarios al Administrador General.
+          meta: { requiereAdmin: true },
+        },
+
+        // Parámetros del Sistema.
+        // También es exclusivo del Administrador General.
+        {
+          path: 'parametros-sistema',
+          name: 'parametros-sistema',
+          component: ParametrosSistemaView,
           meta: { requiereAdmin: true },
         },
 
@@ -149,38 +160,38 @@ router.beforeEach((to) => {
   }
 
   // =============================================
-// PROTEGER RUTAS EXCLUSIVAS DEL ADMINISTRADOR
-// =============================================
+  // PROTEGER RUTAS EXCLUSIVAS DEL ADMINISTRADOR
+  // =============================================
 
-// Verifica si la ruta requiere el rol Administrador General.
-const requiereAdmin = to.matched.some(
-  (ruta) => ruta.meta.requiereAdmin
-)
+  // Verifica si la ruta requiere el rol Administrador General.
+  const requiereAdmin = to.matched.some(
+    (ruta) => ruta.meta.requiereAdmin
+  )
 
-if (requiereAdmin) {
-  // Recupera la información del usuario autenticado.
-  const datosSesion = sessionStorage.getItem('sicop_usuario')
+  if (requiereAdmin) {
+    // Recupera la información del usuario autenticado.
+    const datosSesion = sessionStorage.getItem('sicop_usuario')
 
-  let rolId: number | null = null
+    let rolId: number | null = null
 
-  if (datosSesion) {
-    try {
-      const usuario = JSON.parse(datosSesion) as {
-        rolId?: number
+    if (datosSesion) {
+      try {
+        const usuario = JSON.parse(datosSesion) as {
+          rolId?: number | string
+        }
+
+        // RolId 1 corresponde al Administrador General.
+        rolId = Number(usuario.rolId)
+      } catch {
+        rolId = null
       }
+    }
 
-      rolId = usuario.rolId ?? null
-    } catch {
-      rolId = null
+    // Bloquea el acceso si no es Administrador General.
+    if (rolId !== 1) {
+      return { name: 'dashboard' }
     }
   }
-
-  // Si no es Administrador General, bloquear el acceso.
-  if (rolId !== 1) {
-    return { name: 'dashboard' }
-  }
-}
-
   // Permite continuar hacia la ruta solicitada.
   return true
 })
