@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiPost } from '@/services/api'
+import logoSicop from '@/assets/logo-sicop.png'
 
 // Permite navegar después de iniciar sesión.
 const router = useRouter()
@@ -81,10 +82,18 @@ async function iniciarSesion() {
 
       <!-- Panel izquierdo: presentación del sistema -->
       <section class="login-brand">
-        <div class="brand-logo">
-          <span class="logo-icon">◆</span>
-          <span>SICOP</span>
-        </div>
+       <!-- Logo oficial del sistema SICOP -->
+<div class="brand-logo">
+  <div class="logo-icon">
+    <img
+      :src="logoSicop"
+      alt="Logo de SICOP"
+      class="logo-sicop"
+    />
+  </div>
+
+  <span>SICOP</span>
+</div>
 
         <div class="brand-content">
           <span class="brand-label">SISTEMA ADMINISTRATIVO</span>
@@ -153,16 +162,53 @@ async function iniciarSesion() {
                   required
                 />
 
-                <button
-                  type="button"
-                  class="toggle-password"
-                  :aria-label="mostrarContrasena
-                    ? 'Ocultar contraseña'
-                    : 'Mostrar contraseña'"
-                  @click="mostrarContrasena = !mostrarContrasena"
-                >
-                  {{ mostrarContrasena ? 'Ocultar' : 'Mostrar' }}
-                </button>
+                <!-- Permite mostrar u ocultar la contraseña -->
+<button
+  type="button"
+  class="toggle-password"
+  :aria-label="mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+  :aria-pressed="mostrarContrasena"
+  @click="mostrarContrasena = !mostrarContrasena"
+>
+  <!-- Ojo abierto: contraseña visible -->
+  <svg
+    v-if="mostrarContrasena"
+    xmlns="http://www.w3.org/2000/svg"
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+
+  <!-- Ojo cerrado: contraseña oculta -->
+  <svg
+    v-else
+    xmlns="http://www.w3.org/2000/svg"
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="m15 18-.722-3.25"/>
+    <path d="M2 8a10.645 10.645 0 0 0 20 0"/>
+    <path d="m20 15-1.726-2.05"/>
+    <path d="m4 15 1.726-2.05"/>
+    <path d="m9 18 .722-3.25"/>
+  </svg>
+</button>
               </div>
             </div>
 
@@ -203,7 +249,7 @@ async function iniciarSesion() {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 28px;
+  padding: 16px;
   box-sizing: border-box;
   background: linear-gradient(135deg, #f7f3fc, #eae0f6);
   font-family: 'Segoe UI', Arial, sans-serif;
@@ -212,8 +258,9 @@ async function iniciarSesion() {
 /* Contenedor de los dos paneles */
 .login-container {
   width: 100%;
-  max-width: 1100px;
-  min-height: 650px;
+  max-width: 1000px;
+  min-height: 0;
+  height: min(650px, calc(100dvh - 32px));
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: white;
@@ -226,7 +273,7 @@ async function iniciarSesion() {
 .login-brand {
   background: linear-gradient(145deg, #493078, #7551a7);
   color: white;
-  padding: 48px;
+  padding: 30px 36px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -241,10 +288,24 @@ async function iniciarSesion() {
   letter-spacing: 1px;
 }
 
+/* Contenedor del logo oficial */
 .logo-icon {
-  background: rgba(255, 255, 255, 0.18);
-  padding: 12px;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Imagen del logo SICOP */
+.logo-sicop {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .brand-label {
@@ -285,7 +346,7 @@ async function iniciarSesion() {
 
 /* Panel derecho */
 .login-form-panel {
-  padding: 48px;
+  padding: 28px 36px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -357,20 +418,45 @@ input:focus {
   position: relative;
 }
 
+/* Espacio para el ícono del ojo */
 .password-field input {
-  padding-right: 88px;
+  padding-right: 58px;
 }
 
+ /* Botón para mostrar u ocultar contraseña */
 .toggle-password {
   position: absolute;
-  right: 10px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 34px;
+  height: 34px;
+
   background: transparent;
   border: none;
+  border-radius: 8px;
+
   color: #7551a7;
   cursor: pointer;
-  font-size: 12px;
+
+  transition: color 0.2s, background 0.2s;
+}
+
+/* Efecto al pasar el cursor */
+.toggle-password:hover {
+  color: #493078;
+  background: #f0e8f8;
+}
+
+/* Accesibilidad al navegar con teclado */
+.toggle-password:focus-visible {
+  outline: 2px solid #7551a7;
+  outline-offset: 2px;
 }
 
 .login-button {
@@ -411,7 +497,8 @@ input:focus {
 
   .login-container {
     grid-template-columns: 1fr;
-    min-height: auto;
+    height: auto;
+    min-height: 0;
   }
 
   .login-brand {
@@ -438,6 +525,67 @@ input:focus {
 
   .form-footer {
     margin-top: 30px;
+  }
+}
+
+/* Ajustes para computadoras con pantallas de poca altura */
+@media (min-width: 769px) and (max-height: 750px) {
+  .login-container {
+    height: auto;
+    min-height: 0;
+  }
+
+  .login-brand,
+  .login-form-panel {
+    padding: 22px 32px;
+  }
+
+  .brand-content h1 {
+    font-size: 30px;
+    margin: 12px 0;
+  }
+
+  .brand-content p {
+    line-height: 1.5;
+    font-size: 13px;
+  }
+
+  .brand-features {
+    margin-top: 18px;
+    gap: 9px;
+    font-size: 13px;
+  }
+
+  .welcome-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-size: 25px;
+    margin-bottom: 6px;
+  }
+
+  .form-subtitle {
+    margin-bottom: 18px;
+  }
+
+  .form-group {
+    margin-bottom: 14px;
+  }
+
+  input {
+    padding: 11px 14px;
+  }
+
+  .login-button {
+    padding: 12px;
+    margin-top: 6px;
+  }
+
+  .security-text {
+    margin-top: 16px;
   }
 }
 </style>

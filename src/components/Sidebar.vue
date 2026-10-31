@@ -1,48 +1,14 @@
-
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
+import logoSicop from '../assets/logo-sicop.png'
 
 // SICOP - Menú lateral de navegación.
 // Módulos habilitados:
 // Dashboard, Proveedores, Facturas de compra,
-// Pagos y Usuarios.
+// Pagos, Estados de Cuenta y Usuarios.
 
-// Permite navegar hacia el Login.
-const router = useRouter()
-
-// Recupera los datos del usuario autenticado.
-const usuarioSesion = computed(() => {
-  const datos = sessionStorage.getItem('sicop_usuario')
-
-  if (!datos) return null
-
-  try {
-    return JSON.parse(datos) as {
-      nombre: string
-      correo: string
-    }
-  } catch {
-    return null
-  }
-})
-
-// Obtiene la inicial del nombre.
-const inicialUsuario = computed(() =>
-  usuarioSesion.value?.nombre?.charAt(0).toUpperCase() || 'S'
-)
-
-// Cierra la sesión del usuario autenticado.
-async function cerrarSesion() {
-  // Elimina el token JWT almacenado.
-  sessionStorage.removeItem('sicop_token')
-
-  // Elimina la información del usuario autenticado.
-  sessionStorage.removeItem('sicop_usuario')
-
-  // Redirige al inicio de sesión.
-  await router.replace('/login')
-}
+// La información del usuario y el cierre de sesión
+// ahora se administran desde el Header.
 </script>
 
 <template>
@@ -50,7 +16,13 @@ async function cerrarSesion() {
 
     <!-- Identidad del sistema -->
     <div class="sidebar-brand">
-      <div class="brand-icon">◆</div>
+     <div class="brand-icon">
+  <img
+    :src="logoSicop"
+    alt="Logo de SICOP"
+    class="logo-sicop"
+  />
+</div>
 
       <div>
         <h2>SICOP</h2>
@@ -89,6 +61,14 @@ async function cerrarSesion() {
         <span>Pagos</span>
       </RouterLink>
 
+      
+<!-- Consulta de estados de cuenta por proveedor -->
+<RouterLink to="/estados-cuenta" class="nav-item">
+  <span class="nav-icon">▥</span>
+  <span>Estados de Cuenta</span>
+</RouterLink>
+
+
       <!-- Módulo de administración de usuarios habilitado -->
 <RouterLink to="/usuarios" class="nav-item">
   <span class="nav-icon">♧</span>
@@ -96,28 +76,6 @@ async function cerrarSesion() {
 </RouterLink>
 
     </nav>
-
-    <!-- Parte inferior -->
-    <div class="sidebar-footer">
-          <div class="user-info">
-            <div class="user-avatar">{{ inicialUsuario }}</div>
-
-            <div>
-              <strong>{{ usuarioSesion?.nombre || 'SICOP' }}</strong>
-              <small>{{ usuarioSesion?.correo || '' }}</small>
-            </div>
-          </div>
-
-          <!-- Cierra la sesión real del usuario. -->
-          <button
-            type="button"
-            class="logout-button"
-            @click="cerrarSesion"
-            >
-              <span>↪</span>
-              <span>Cerrar sesión</span>
-            </button>
-        </div>
 
   </aside>
 </template>
@@ -147,13 +105,21 @@ async function cerrarSesion() {
 }
 
 .brand-icon {
-  width: 44px;
-  height: 44px;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  font-size: 23px;
+}
+
+/* Logo oficial de SICOP */
+.logo-sicop {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .sidebar-brand h2 {
@@ -224,11 +190,6 @@ a.nav-item:hover {
   cursor: not-allowed;
 }
 
-/* Información inferior */
-.sidebar-footer {
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
 
 .user-info {
   display: flex;
