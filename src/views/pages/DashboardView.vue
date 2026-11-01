@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Bar, Doughnut } from 'vue-chartjs'
@@ -14,9 +15,6 @@ import {
 } from 'chart.js'
 import { apiGet } from '../../services/api'
 
-// SICOP - Dashboard administrativo.
-// Estadísticas, gráficas, facturas, pagos y alertas.
-
 ChartJS.register(
   Title,
   Tooltip,
@@ -27,7 +25,6 @@ ChartJS.register(
   LinearScale
 )
 
-// GET /api/Dashboard/resumen
 interface DashboardResumen {
   totalProveedores: number
   totalFacturas: number
@@ -41,7 +38,6 @@ interface DashboardResumen {
   fechaConsulta: string
 }
 
-// GET /api/Dashboard/mensual
 interface DashboardMensual {
   anio: number
   mes: number
@@ -52,7 +48,6 @@ interface DashboardMensual {
   cantidadPagos: number
 }
 
-// DTO utilizado por los reportes de facturas.
 interface ReporteFactura {
   facturaCompraId: number
   numeroFactura: string
@@ -67,7 +62,6 @@ interface ReporteFactura {
   diasVencidos: number
 }
 
-// DTO utilizado por el historial de pagos.
 interface ReportePago {
   pagoId: number
   facturaCompraId: number
@@ -84,44 +78,26 @@ interface ReportePago {
   motivoAnulacion: string | null
 }
 
-// Estadísticas generales.
 const resumen = ref<DashboardResumen | null>(null)
-
-// Datos mensuales.
 const datosMensuales = ref<DashboardMensual[]>([])
-
-// Facturas y pagos recientes.
 const facturasRecientes = ref<ReporteFactura[]>([])
 const facturasParaAlertas = ref<ReporteFactura[]>([])
 const pagosRecientes = ref<ReportePago[]>([])
-
-// Configuración de días para las alertas.
 const diasAlertaVencimiento = ref(5)
-
-// Estado de carga de la configuración.
 const cargandoConfiguracionAlertas = ref(false)
-// =============================================
-// PAGINACIÓN DEL DASHBOARD
-// =============================================
 
-// Cantidad de registros por página.
 const registrosPorPagina = 5
-
-// Página actual de cada sección.
 const paginaFacturas = ref(1)
 const paginaPagos = ref(1)
 
-// Total de páginas de facturas.
 const totalPaginasFacturas = computed(() =>
   Math.max(1, Math.ceil(facturasRecientes.value.length / registrosPorPagina))
 )
 
-// Total de páginas de pagos.
 const totalPaginasPagos = computed(() =>
   Math.max(1, Math.ceil(pagosRecientes.value.length / registrosPorPagina))
 )
 
-// Facturas visibles en la página actual.
 const facturasPaginadas = computed(() => {
   const inicio = (paginaFacturas.value - 1) * registrosPorPagina
 
@@ -131,7 +107,6 @@ const facturasPaginadas = computed(() => {
   )
 })
 
-// Pagos visibles en la página actual.
 const pagosPaginados = computed(() => {
   const inicio = (paginaPagos.value - 1) * registrosPorPagina
 
@@ -141,36 +116,30 @@ const pagosPaginados = computed(() => {
   )
 })
 
-// Cambiar página de facturas.
 function cambiarPaginaFacturas(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginasFacturas.value) {
     paginaFacturas.value = pagina
   }
 }
 
-// Cambiar página de pagos.
 function cambiarPaginaPagos(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginasPagos.value) {
     paginaPagos.value = pagina
   }
 }
 
-// Estados de carga.
 const cargando = ref(true)
 const cargandoGraficas = ref(true)
 const cargandoFacturas = ref(true)
 const cargandoPagos = ref(true)
 
-// Mensajes de error.
 const error = ref('')
 const errorGraficas = ref('')
 const errorFacturas = ref('')
 const errorPagos = ref('')
 
-// Año seleccionado.
 const anioSeleccionado = ref(new Date().getFullYear())
 
-// Formato de moneda guatemalteca.
 function formatoMoneda(valor: number): string {
   return new Intl.NumberFormat('es-GT', {
     style: 'currency',
@@ -178,7 +147,6 @@ function formatoMoneda(valor: number): string {
   }).format(valor)
 }
 
-// Formato de fecha.
 function formatoFecha(fecha: string): string {
   if (!fecha) return '—'
 
@@ -190,7 +158,6 @@ function formatoFecha(fecha: string): string {
   return `${partes[2]}/${partes[1]}/${partes[0]}`
 }
 
-// Consultar estadísticas generales.
 async function cargarResumen() {
   cargando.value = true
   error.value = ''
@@ -208,7 +175,6 @@ async function cargarResumen() {
   }
 }
 
-// Consultar estadísticas mensuales.
 async function cargarGraficas() {
   cargandoGraficas.value = true
   errorGraficas.value = ''
@@ -227,7 +193,6 @@ async function cargarGraficas() {
   }
 }
 
-// Consultar los días de anticipación configurados.
 async function cargarConfiguracionAlertas() {
   cargandoConfiguracionAlertas.value = true
 
@@ -238,23 +203,18 @@ async function cargarConfiguracionAlertas() {
 
     diasAlertaVencimiento.value =
       respuesta.dias > 0 ? respuesta.dias : 5
-
   } catch (err) {
     console.error(
       'Error al cargar configuración de alertas:',
       err
     )
 
-    // Valor de respaldo si no se puede consultar el parámetro.
     diasAlertaVencimiento.value = 5
-
   } finally {
     cargandoConfiguracionAlertas.value = false
   }
 }
 
-// Consultar facturas recientes y conservar
-// todas las facturas pendientes para las alertas.
 async function cargarFacturasRecientes() {
   cargandoFacturas.value = true
   errorFacturas.value = ''
@@ -269,25 +229,20 @@ async function cargarFacturasRecientes() {
       ),
     ])
 
-    // Conserva todas las facturas pendientes
-    // que todavía tengan saldo por pagar.
     facturasParaAlertas.value = pendientes.filter(
       factura => Number(factura.saldoPendiente) > 0
     )
 
-    // Combina y ordena las facturas recientes.
-    // Conserva únicamente las cinco más recientes.
     facturasRecientes.value = [...pendientes, ...pagadas]
       .sort((a, b) => {
         const diferencia =
           new Date(b.fechaEmision).getTime() -
           new Date(a.fechaEmision).getTime()
 
-              return diferencia !== 0
-        ? diferencia
-        : b.facturaCompraId - a.facturaCompraId
+        return diferencia !== 0
+          ? diferencia
+          : b.facturaCompraId - a.facturaCompraId
       })
-
   } catch (err) {
     console.error(
       'Error al cargar facturas recientes:',
@@ -299,14 +254,11 @@ async function cargarFacturasRecientes() {
 
     errorFacturas.value =
       'No se pudieron consultar las facturas recientes.'
-
   } finally {
     cargandoFacturas.value = false
   }
 }
 
-// Consultar los últimos pagos registrados.
-// Se conservan también los pagos anulados en el historial.
 async function cargarPagosRecientes() {
   cargandoPagos.value = true
   errorPagos.value = ''
@@ -322,11 +274,10 @@ async function cargarPagosRecientes() {
           new Date(b.fechaPago).getTime() -
           new Date(a.fechaPago).getTime()
 
-                return diferencia !== 0
+        return diferencia !== 0
           ? diferencia
           : b.pagoId - a.pagoId
       })
-
   } catch (err) {
     console.error(
       'Error al cargar pagos recientes:',
@@ -337,14 +288,11 @@ async function cargarPagosRecientes() {
 
     errorPagos.value =
       'No se pudo consultar la actividad reciente.'
-
   } finally {
     cargandoPagos.value = false
   }
 }
 
-// Calcular los días restantes hasta el vencimiento.
-// Calcular los días restantes hasta el vencimiento.
 function calcularDiasRestantes(fechaVencimiento: string): number {
   if (!fechaVencimiento) return Number.NaN
 
@@ -389,8 +337,6 @@ function calcularDiasRestantes(fechaVencimiento: string): number {
   )
 }
 
-// Facturas próximas a vencer.
-// Solo se incluyen facturas con saldo pendiente.
 const facturasProximasVencer = computed(() =>
   facturasParaAlertas.value
     .filter((factura) => {
@@ -410,7 +356,6 @@ const facturasProximasVencer = computed(() =>
     )
 )
 
-// Facturas vencidas que todavía tienen saldo pendiente.
 const facturasVencidasAlerta = computed(() =>
   facturasParaAlertas.value
     .filter((factura) => {
@@ -429,7 +374,6 @@ const facturasVencidasAlerta = computed(() =>
     )
 )
 
-// Gráfica de barras: facturación y pagos mensuales.
 const graficaMensual = computed(() => ({
   labels: datosMensuales.value.map(
     dato => dato.nombreMes
@@ -456,7 +400,6 @@ const graficaMensual = computed(() => ({
   ],
 }))
 
-// Configuración de la gráfica mensual.
 const opcionesMensuales: ChartOptions<'bar'> = {
   responsive: true,
   maintainAspectRatio: false,
@@ -483,7 +426,6 @@ const opcionesMensuales: ChartOptions<'bar'> = {
   },
 }
 
-// Gráfica circular: estado de las facturas.
 const graficaEstados = computed(() => ({
   labels: ['Pagadas', 'Pendientes o parciales'],
   datasets: [
@@ -514,12 +456,10 @@ const opcionesEstados: ChartOptions<'doughnut'> = {
   },
 }
 
-// Comprobar si existen facturas.
 const hayFacturas = computed(
   () => (resumen.value?.totalFacturas ?? 0) > 0
 )
 
-// Cargar información al abrir el Dashboard.
 onMounted(() => {
   cargarResumen()
   cargarGraficas()
@@ -531,8 +471,6 @@ onMounted(() => {
 
 <template>
   <main class="dashboard">
-
-    <!-- Encabezado principal -->
     <header class="dashboard-header">
       <div>
         <h1>Panel principal</h1>
@@ -544,7 +482,6 @@ onMounted(() => {
       </span>
     </header>
 
-    <!-- Error en estadísticas generales -->
     <div v-if="error" class="error-message" role="alert">
       <span>{{ error }}</span>
       <button type="button" @click="cargarResumen">
@@ -552,12 +489,10 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Alertas de vencimiento -->
     <section
       class="alerts-section"
       aria-label="Alertas de vencimiento"
     >
-
       <div class="alerts-heading">
         <div>
           <h2>Alertas de vencimiento</h2>
@@ -580,10 +515,7 @@ onMounted(() => {
       </div>
 
       <div v-else class="alerts-grid">
-
-        <!-- Facturas próximas a vencer -->
         <article class="alert-card alert-upcoming">
-
           <div class="alert-card-heading">
             <div>
               <span class="alert-kicker">
@@ -608,13 +540,11 @@ onMounted(() => {
           </div>
 
           <div v-else class="alert-list">
-
             <div
               v-for="factura in facturasProximasVencer"
               :key="`proxima-${factura.facturaCompraId}`"
               class="alert-item"
             >
-
               <div class="alert-item-details">
                 <strong>{{ factura.numeroFactura }}</strong>
 
@@ -641,15 +571,11 @@ onMounted(() => {
                   }}
                 </small>
               </div>
-
             </div>
-
           </div>
         </article>
 
-        <!-- Facturas vencidas -->
         <article class="alert-card alert-overdue">
-
           <div class="alert-card-heading">
             <div>
               <span class="alert-kicker">
@@ -674,13 +600,11 @@ onMounted(() => {
           </div>
 
           <div v-else class="alert-list">
-
             <div
               v-for="factura in facturasVencidasAlerta"
               :key="`vencida-${factura.facturaCompraId}`"
               class="alert-item"
             >
-
               <div class="alert-item-details">
                 <strong>{{ factura.numeroFactura }}</strong>
 
@@ -705,23 +629,17 @@ onMounted(() => {
                   días
                 </small>
               </div>
-
             </div>
-
           </div>
         </article>
-
       </div>
 
       <p v-if="errorFacturas" class="alerts-note">
         No fue posible cargar las facturas para generar las alertas.
       </p>
-
     </section>
 
-    <!-- Tarjetas originales -->
     <section class="stats-grid">
-
       <article class="stat-card">
         <div class="stat-icon">♙</div>
         <p>Total de proveedores</p>
@@ -777,15 +695,10 @@ onMounted(() => {
 
         <span>Monto abonado a facturas</span>
       </article>
-
     </section>
 
-    <!-- Gráficas financieras existentes -->
     <section class="charts-grid">
-
-      <!-- Facturación y pagos mensuales -->
       <article class="content-card chart-card">
-
         <div class="chart-header">
           <div>
             <h3>Facturación y pagos mensuales</h3>
@@ -833,12 +746,9 @@ onMounted(() => {
             :options="opcionesMensuales"
           />
         </div>
-
       </article>
 
-      <!-- Estado de las facturas -->
       <article class="content-card chart-card">
-
         <h3>Estado de las facturas</h3>
 
         <p class="card-description">
@@ -871,17 +781,11 @@ onMounted(() => {
             <span>Facturas vigentes</span>
           </div>
         </div>
-
       </article>
-
     </section>
 
-    <!-- Facturas y actividad reciente -->
     <section class="dashboard-content">
-
-      <!-- Últimas facturas -->
       <article class="content-card">
-
         <div class="section-header">
           <div>
             <h3>Facturas recientes</h3>
@@ -922,7 +826,6 @@ onMounted(() => {
         </div>
 
         <div v-else class="recent-list">
-
           <div
             v-for="factura in facturasPaginadas"
             :key="factura.facturaCompraId"
@@ -957,10 +860,8 @@ onMounted(() => {
               </span>
             </div>
           </div>
-
         </div>
 
-        <!-- PAGINACIÓN DE FACTURAS: PEGAR AQUÍ -->
         <div v-if="facturasRecientes.length > 0" class="pagination-container">
           <span class="pagination-info">
             Mostrando
@@ -994,12 +895,9 @@ onMounted(() => {
             </button>
           </div>
         </div>
-
       </article>
 
-      <!-- Últimos pagos -->
       <article class="content-card">
-
         <div class="section-header">
           <div>
             <h3>Actividad reciente</h3>
@@ -1040,7 +938,6 @@ onMounted(() => {
         </div>
 
         <div v-else class="recent-list">
-
           <div
             v-for="pago in pagosPaginados"
             :key="pago.pagoId"
@@ -1075,11 +972,10 @@ onMounted(() => {
               >
                 {{ pago.anulado ? 'Anulado' : 'Válido' }}
               </span>
-                      </div>
+            </div>
           </div>
         </div>
 
-        <!-- PAGINACIÓN DE PAGOS: PEGAR AQUÍ -->
         <div v-if="pagosRecientes.length > 0" class="pagination-container">
           <span class="pagination-info">
             Mostrando
@@ -1112,18 +1008,13 @@ onMounted(() => {
               Siguiente ›
             </button>
           </div>
-
         </div>
-
       </article>
-
     </section>
-
   </main>
 </template>
 
 <style scoped>
-/* Contenedor principal */
 .dashboard {
   min-height: 100vh;
   padding: 36px;
@@ -1131,7 +1022,6 @@ onMounted(() => {
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 
-/* Encabezado */
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -1161,7 +1051,6 @@ onMounted(() => {
   font-weight: 600;
 }
 
-/* Mensaje de error */
 .error-message {
   display: flex;
   justify-content: space-between;
@@ -1190,7 +1079,6 @@ onMounted(() => {
   background: #ffe7e7;
 }
 
-/* Alertas de vencimiento */
 .alerts-section {
   margin-bottom: 28px;
   padding: 24px;
@@ -1362,7 +1250,6 @@ onMounted(() => {
   font-size: 12px;
 }
 
-/* Tarjetas estadísticas */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1409,7 +1296,6 @@ onMounted(() => {
   font-size: 12px;
 }
 
-/* Gráficas */
 .charts-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -1488,7 +1374,6 @@ onMounted(() => {
   cursor: pointer;
 }
 
-/* Secciones inferiores */
 .dashboard-content {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -1514,7 +1399,6 @@ onMounted(() => {
   font-size: 13px;
 }
 
-/* Encabezados de las secciones recientes */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -1535,7 +1419,6 @@ onMounted(() => {
   font-size: 20px;
 }
 
-/* Listas de facturas y pagos */
 .recent-list {
   display: flex;
   flex-direction: column;
@@ -1640,7 +1523,6 @@ onMounted(() => {
   opacity: 0.65;
 }
 
-/* Estados vacíos */
 .empty-state {
   min-height: 230px;
   display: flex;
@@ -1665,7 +1547,6 @@ onMounted(() => {
   color: #a69bb2;
 }
 
-/* Pantallas medianas */
 @media (max-width: 1100px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1676,7 +1557,6 @@ onMounted(() => {
   }
 }
 
-/* Celulares */
 @media (max-width: 650px) {
   .dashboard {
     padding: 20px;
@@ -1711,9 +1591,6 @@ onMounted(() => {
     align-items: flex-start;
   }
 }
-/* =========================================
-   PAGINACIÓN DEL DASHBOARD
-   ========================================= */
 
 .pagination-container {
   display: flex;
