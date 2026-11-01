@@ -1,12 +1,9 @@
+
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-
-// Importamos el formulario de proveedores.
 import ProveedorModal from '../../components/ProveedorModal.vue'
-
 import { apiGet, apiPost, apiPut, apiPatch } from '@/services/api'
 
-// Estructura de los datos de un proveedor.
 interface Proveedor {
   proveedorId: number
   nombre: string
@@ -17,7 +14,6 @@ interface Proveedor {
   activo: boolean
 }
 
-// Estructura de los datos recibidos desde el formulario.
 interface ProveedorFormulario {
   proveedorId?: number
   nombre: string
@@ -28,34 +24,16 @@ interface ProveedorFormulario {
   activo: boolean
 }
 
-// --------------------------------------------------
-// DATOS DE DEMOSTRACIÓN
-// --------------------------------------------------
-// Estos registros son temporales.
-// Posteriormente se reemplazarán por los datos
-// obtenidos desde la API de ASP.NET Core.
-// --------------------------------------------------
-
-// Lista de proveedores obtenidos desde SQL Server.
 const proveedores = ref<Proveedor[]>([])
 
-// =============================================
-// PERMISOS DEL USUARIO AUTENTICADO
-// =============================================
-
-// Recuperar la información del usuario que inició sesión.
 const usuarioGuardado = sessionStorage.getItem('sicop_usuario')
 
-// Obtener el rol del usuario autenticado.
-// Obtener el identificador del rol del usuario autenticado.
 const rolUsuario = usuarioGuardado
   ? Number(JSON.parse(usuarioGuardado).rolId)
   : null
 
-// Rol 1: Administrador General.
 const esAdministradorGeneral = rolUsuario === 1
 
-// Consulta los proveedores registrados en el backend.
 async function cargarProveedores() {
   try {
     proveedores.value = await apiGet<Proveedor[]>('/api/Proveedores')
@@ -64,20 +42,12 @@ async function cargarProveedores() {
   }
 }
 
-// Ejecuta la consulta al ingresar al módulo.
 onMounted(() => {
   cargarProveedores()
 })
 
-
-// --------------------------------------------------
-// BUSCADOR DE PROVEEDORES
-// --------------------------------------------------
-
-// Texto ingresado en el buscador.
 const busqueda = ref('')
 
-// Filtrar proveedores por nombre o NIT.
 const proveedoresFiltrados = computed(() => {
   const texto = busqueda.value.toLowerCase().trim()
 
@@ -89,22 +59,13 @@ const proveedoresFiltrados = computed(() => {
   })
 })
 
-   // =============================================
-// PAGINACIÓN DE PROVEEDORES
-// =============================================
-
-// Cantidad de proveedores que se mostrarán por página.
 const registrosPorPagina = 5
-
-// Página seleccionada actualmente.
 const paginaActual = ref(1)
 
-// Total de páginas según los resultados del buscador.
 const totalPaginas = computed(() =>
   Math.max(1, Math.ceil(proveedoresFiltrados.value.length / registrosPorPagina))
 )
 
-// Registros correspondientes a la página actual.
 const proveedoresPaginados = computed(() => {
   const inicio = (paginaActual.value - 1) * registrosPorPagina
 
@@ -114,69 +75,44 @@ const proveedoresPaginados = computed(() => {
   )
 })
 
-// Cambiar de página sin salir del rango permitido.
 function cambiarPagina(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginas.value) {
     paginaActual.value = pagina
   }
 }
 
-// Volver a la primera página cuando cambia la búsqueda.
 watch(busqueda, () => {
   paginaActual.value = 1
 })
 
-// Evitar páginas vacías cuando disminuye la cantidad de registros.
 watch(totalPaginas, (total) => {
   if (paginaActual.value > total) {
     paginaActual.value = total
   }
 })
 
-
-
-// --------------------------------------------------
-// CONTROL DEL FORMULARIO MODAL
-// --------------------------------------------------
-
-// Indica si la ventana del formulario está abierta.
 const mostrarModal = ref(false)
-
-// Guarda el proveedor que se desea editar.
 const proveedorSeleccionado = ref<Proveedor | null>(null)
 
-// Abrir formulario para registrar un proveedor.
 function nuevoProveedor() {
   proveedorSeleccionado.value = null
   mostrarModal.value = true
 }
 
-// Abrir formulario para editar un proveedor.
 function editarProveedor(proveedor: Proveedor) {
-
-  // Impedir editar proveedores inactivos.
   if (!proveedor.activo) return
 
-  // Cargar los datos del proveedor seleccionado.
   proveedorSeleccionado.value = { ...proveedor }
-
-  // Abrir el formulario de edición.
   mostrarModal.value = true
 }
 
-// Cerrar el formulario.
 function cerrarModal() {
   mostrarModal.value = false
   proveedorSeleccionado.value = null
 }
 
-
-// --------------------------------------------------
-// GUARDAR PROVEEDOR
-// --------------------------------------------------
 async function guardarProveedor(datos: ProveedorFormulario) {
   try {
-    // Campos permitidos por los DTOs del backend.
     const proveedorDatos = {
       nombre: datos.nombre,
       nit: datos.nit,
@@ -186,26 +122,18 @@ async function guardarProveedor(datos: ProveedorFormulario) {
     }
 
     if (datos.proveedorId !== undefined) {
-
-      // PUT: actualizar proveedor en SQL Server.
       await apiPut<void>(
         `/api/Proveedores/${datos.proveedorId}`,
         proveedorDatos
       )
-
     } else {
-
-      // POST: registrar proveedor en SQL Server.
       await apiPost<Proveedor>(
         '/api/Proveedores',
         proveedorDatos
       )
     }
 
-    // Actualizar la tabla con los datos reales.
     await cargarProveedores()
-
-    // Cerrar el formulario después de guardar.
     cerrarModal()
 
   } catch (error) {
@@ -214,59 +142,37 @@ async function guardarProveedor(datos: ProveedorFormulario) {
   }
 }
 
-
- // ==============================================
- // ACTIVAR Y DESACTIVAR PROVEEDORES
- // ==============================================
-
- // Controla la ventana de confirmación.
 const mostrarConfirmacion = ref(false)
-
-// Proveedor al que se cambiará el estado.
 const proveedorCambioEstado = ref<Proveedor | null>(null)
 
-// Abre la confirmación para activar o desactivar.
 function confirmarCambioEstado(proveedor: Proveedor) {
   proveedorCambioEstado.value = proveedor
   mostrarConfirmacion.value = true
 }
 
-// Cierra la ventana sin realizar cambios.
 function cancelarCambioEstado() {
   mostrarConfirmacion.value = false
   proveedorCambioEstado.value = null
 }
 
-// Cambia el estado del proveedor seleccionado.
-// Por ahora, únicamente modifica los datos temporales.
-
 async function cambiarEstadoProveedor() {
-
-  // Obtener el proveedor seleccionado.
   const seleccionado = proveedorCambioEstado.value
 
   if (!seleccionado) return
 
   try {
-
-    // Determinar si corresponde activar o desactivar.
     const accion = seleccionado.activo
       ? 'desactivar'
       : 'activar'
 
-    // PATCH: guardar el cambio en SQL Server.
     await apiPatch(
       `/api/Proveedores/${seleccionado.proveedorId}/${accion}`
     )
 
-    // Consultar nuevamente los proveedores reales.
     await cargarProveedores()
-
-    // Cerrar la ventana de confirmación.
     cancelarCambioEstado()
 
   } catch (error) {
-
     console.error('Error al cambiar el estado del proveedor:', error)
 
     alert(
@@ -275,17 +181,10 @@ async function cambiarEstadoProveedor() {
     )
   }
 }
-
-
 </script>
 
 <template>
   <main class="proveedores-page">
-
-    <!-- ====================================== -->
-    <!-- ENCABEZADO DEL MÓDULO                 -->
-    <!-- ====================================== -->
-
     <header class="page-header">
       <div>
         <span class="page-label">
@@ -300,7 +199,6 @@ async function cambiarEstadoProveedor() {
         </p>
       </div>
 
-      <!-- Botón para abrir el formulario -->
       <button
         class="btn-primary"
         type="button"
@@ -311,13 +209,7 @@ async function cambiarEstadoProveedor() {
       </button>
     </header>
 
-    <!-- ====================================== -->
-    <!-- CONTENEDOR PRINCIPAL                  -->
-    <!-- ====================================== -->
-
     <section class="table-card">
-
-      <!-- Encabezado de la tabla -->
       <div class="table-header">
         <div>
           <h2>Proveedores registrados</h2>
@@ -327,15 +219,10 @@ async function cambiarEstadoProveedor() {
           </p>
         </div>
 
-        <!-- Contador de proveedores -->
         <span class="total-badge">
           {{ proveedores.length }} proveedores
         </span>
       </div>
-
-      <!-- ====================================== -->
-      <!-- BUSCADOR                              -->
-      <!-- ====================================== -->
 
       <div class="search-container">
         <span class="search-icon">⌕</span>
@@ -348,14 +235,8 @@ async function cambiarEstadoProveedor() {
         />
       </div>
 
-      <!-- ====================================== -->
-      <!-- TABLA DE PROVEEDORES                  -->
-      <!-- ====================================== -->
-
       <div class="table-responsive">
         <table>
-
-          <!-- Encabezados de las columnas -->
           <thead>
             <tr>
               <th>ID</th>
@@ -368,39 +249,31 @@ async function cambiarEstadoProveedor() {
             </tr>
           </thead>
 
-          <!-- Registros -->
           <tbody>
             <tr
               v-for="proveedor in proveedoresPaginados"
               :key="proveedor.proveedorId"
             >
-
-              <!-- Identificador -->
               <td>
                 #{{ proveedor.proveedorId }}
               </td>
 
-              <!-- Nombre -->
               <td class="provider-name">
                 {{ proveedor.nombre }}
               </td>
 
-              <!-- NIT -->
               <td>
                 {{ proveedor.nit }}
               </td>
 
-              <!-- Teléfono -->
               <td>
                 {{ proveedor.telefono || '—' }}
               </td>
 
-              <!-- Correo electrónico -->
               <td>
                 {{ proveedor.correo || '—' }}
               </td>
 
-              <!-- Estado del proveedor -->
               <td>
                 <span
                   class="status-badge"
@@ -418,11 +291,8 @@ async function cambiarEstadoProveedor() {
                 </span>
               </td>
 
-              <!-- Botones de acciones -->
               <td>
                 <div class="actions-container">
-
-                  <!-- Editar proveedor -->
                   <button
                     class="btn-edit"
                     type="button"
@@ -432,29 +302,21 @@ async function cambiarEstadoProveedor() {
                     ✎ Editar
                   </button>
 
-                  
-
-<!-- Activar o desactivar: solo Administrador General -->
-<button
-  v-if="esAdministradorGeneral"
-  type="button"
-  class="btn-status"
-  :class="proveedor.activo ? 'btn-deactivate' : 'btn-activate'"
-  @click="confirmarCambioEstado(proveedor)"
->
-  {{ proveedor.activo ? 'Desactivar' : 'Activar' }}
-</button>
-
-
-
+                  <button
+                    v-if="esAdministradorGeneral"
+                    type="button"
+                    class="btn-status"
+                    :class="proveedor.activo ? 'btn-deactivate' : 'btn-activate'"
+                    @click="confirmarCambioEstado(proveedor)"
+                  >
+                    {{ proveedor.activo ? 'Desactivar' : 'Activar' }}
+                  </button>
                 </div>
               </td>
             </tr>
 
-            <!-- Mensaje cuando no hay resultados -->
             <tr v-if="proveedoresFiltrados.length === 0">
               <td colspan="7" class="empty-state">
-
                 <div class="empty-icon">
                   ▤
                 </div>
@@ -465,65 +327,49 @@ async function cambiarEstadoProveedor() {
                   No se encontraron proveedores
                   para mostrar.
                 </p>
-
               </td>
             </tr>
           </tbody>
-
         </table>
       </div>
-      <!-- ====================================== -->
-<!-- PAGINACIÓN DE PROVEEDORES              -->
-<!-- ====================================== -->
 
-<div
-  v-if="proveedoresFiltrados.length > 0"
-  class="pagination-container"
->
-  <!-- Cantidad de registros mostrados -->
-  <span class="pagination-info">
-    Mostrando
-    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
-    -
-    {{ Math.min(paginaActual * registrosPorPagina, proveedoresFiltrados.length) }}
-    de {{ proveedoresFiltrados.length }} proveedores
-  </span>
+      <div
+        v-if="proveedoresFiltrados.length > 0"
+        class="pagination-container"
+      >
+        <span class="pagination-info">
+          Mostrando
+          {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+          -
+          {{ Math.min(paginaActual * registrosPorPagina, proveedoresFiltrados.length) }}
+          de {{ proveedoresFiltrados.length }} proveedores
+        </span>
 
-  <!-- Controles de navegación -->
-  <div class="pagination-buttons">
+        <div class="pagination-buttons">
+          <button
+            type="button"
+            class="pagination-btn"
+            :disabled="paginaActual === 1"
+            @click="cambiarPagina(paginaActual - 1)"
+          >
+            ‹ Anterior
+          </button>
 
-    <button
-      type="button"
-      class="pagination-btn"
-      :disabled="paginaActual === 1"
-      @click="cambiarPagina(paginaActual - 1)"
-    >
-      ‹ Anterior
-    </button>
+          <span class="pagination-current">
+            Página {{ paginaActual }} de {{ totalPaginas }}
+          </span>
 
-    <span class="pagination-current">
-      Página {{ paginaActual }} de {{ totalPaginas }}
-    </span>
-
-    <button
-      type="button"
-      class="pagination-btn"
-      :disabled="paginaActual === totalPaginas"
-      @click="cambiarPagina(paginaActual + 1)"
-    >
-      Siguiente ›
-    </button>
-
-  </div>
-</div>
-
+          <button
+            type="button"
+            class="pagination-btn"
+            :disabled="paginaActual === totalPaginas"
+            @click="cambiarPagina(paginaActual + 1)"
+          >
+            Siguiente ›
+          </button>
+        </div>
+      </div>
     </section>
-
-    <!-- ====================================== -->
-    <!-- FORMULARIO MODAL                       -->
-    <!-- ====================================== -->
-    <!-- Este componente fue creado previamente -->
-    <!-- en src/components/ProveedorModal.vue   -->
 
     <ProveedorModal
       :visible="mostrarModal"
@@ -532,100 +378,80 @@ async function cambiarEstadoProveedor() {
       @guardar="guardarProveedor"
     />
 
-<!-- ====================================== -->
-<!-- CONFIRMACIÓN DE CAMBIO DE ESTADO      -->
-<!-- ====================================== -->
-
-<div
-  v-if="mostrarConfirmacion && proveedorCambioEstado"
-  class="confirmation-overlay"
-  @click.self="cancelarCambioEstado"
->
-  <section
-    class="confirmation-card"
-    role="alertdialog"
-    aria-modal="true"
-    aria-labelledby="confirmation-title"
-    aria-describedby="confirmation-description"
-  >
-    <!-- Icono -->
-    <div class="confirmation-icon">
-      ?
-    </div>
-
-    <!-- Título -->
-    <h2 id="confirmation-title">
-      {{
-        proveedorCambioEstado.activo
-          ? '¿Desactivar proveedor?'
-          : '¿Activar proveedor?'
-      }}
-    </h2>
-
-    <!-- Mensaje -->
-    <p id="confirmation-description">
-      Estás a punto de
-      {{
-        proveedorCambioEstado.activo
-          ? 'desactivar'
-          : 'activar'
-      }}
-      al proveedor
-      <strong>{{ proveedorCambioEstado.nombre }}</strong>.
-    </p>
-
-    <p class="confirmation-note">
-      Esta acción podrá revertirse posteriormente.
-    </p>
-
-    <!-- Botones -->
-    <div class="confirmation-actions">
-      <button
-        type="button"
-        class="btn-confirm-cancel"
-        @click="cancelarCambioEstado"
+    <div
+      v-if="mostrarConfirmacion && proveedorCambioEstado"
+      class="confirmation-overlay"
+      @click.self="cancelarCambioEstado"
+    >
+      <section
+        class="confirmation-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmation-title"
+        aria-describedby="confirmation-description"
       >
-        Cancelar
-      </button>
+        <div class="confirmation-icon">
+          ?
+        </div>
 
-      <button
-        type="button"
-        class="btn-confirm-action"
-        @click="cambiarEstadoProveedor"
-      >
-        {{
-          proveedorCambioEstado.activo
-            ? 'Sí, desactivar'
-            : 'Sí, activar'
-        }}
-      </button>
+        <h2 id="confirmation-title">
+          {{
+            proveedorCambioEstado.activo
+              ? '¿Desactivar proveedor?'
+              : '¿Activar proveedor?'
+          }}
+        </h2>
+
+        <p id="confirmation-description">
+          Estás a punto de
+          {{
+            proveedorCambioEstado.activo
+              ? 'desactivar'
+              : 'activar'
+          }}
+          al proveedor
+          <strong>{{ proveedorCambioEstado.nombre }}</strong>.
+        </p>
+
+        <p class="confirmation-note">
+          Esta acción podrá revertirse posteriormente.
+        </p>
+
+        <div class="confirmation-actions">
+          <button
+            type="button"
+            class="btn-confirm-cancel"
+            @click="cancelarCambioEstado"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            class="btn-confirm-action"
+            @click="cambiarEstadoProveedor"
+          >
+            {{
+              proveedorCambioEstado.activo
+                ? 'Sí, desactivar'
+                : 'Sí, activar'
+            }}
+          </button>
+        </div>
+      </section>
     </div>
-  </section>
-</div>
-
   </main>
 </template>
 
 <style scoped>
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
-  /* =========================================
-    PROVEEDORES - BOTÓN EDITAR DESHABILITADO
-    ========================================= */
-
-  /* Indica visualmente que no se puede editar. */
-  button:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  /* Evita efectos de interacción al pasar el mouse. */
-  button:disabled:hover {
-    transform: none;
-  }
-
-/* ========================================= */
-/* CONTENEDOR GENERAL                       */
-/* ========================================= */
+button:disabled:hover {
+  transform: none;
+}
 
 .proveedores-page {
   min-height: 100%;
@@ -633,10 +459,6 @@ async function cambiarEstadoProveedor() {
   background: #f8f5fc;
   font-family: Arial, sans-serif;
 }
-
-/* ========================================= */
-/* ENCABEZADO PRINCIPAL                     */
-/* ========================================= */
 
 .page-header {
   display: flex;
@@ -665,10 +487,6 @@ async function cambiarEstadoProveedor() {
   font-size: 15px;
 }
 
-/* ========================================= */
-/* BOTÓN NUEVO PROVEEDOR                    */
-/* ========================================= */
-
 .btn-primary {
   border: none;
   border-radius: 12px;
@@ -685,10 +503,6 @@ async function cambiarEstadoProveedor() {
 .btn-primary:hover {
   background: #633e96;
 }
-
-/* ========================================= */
-/* CONTENEDOR DE LA TABLA                   */
-/* ========================================= */
 
 .table-card {
   background: #ffffff;
@@ -727,10 +541,6 @@ async function cambiarEstadoProveedor() {
   font-weight: 600;
 }
 
-/* ========================================= */
-/* BUSCADOR                                 */
-/* ========================================= */
-
 .search-container {
   display: flex;
   align-items: center;
@@ -758,30 +568,22 @@ async function cambiarEstadoProveedor() {
   color: #352057;
 }
 
-/* ========================================= */
-/* TABLA                                    */
-/* ========================================= */
-
-/* Permite desplazamiento horizontal si la tabla es ancha */
 .table-responsive {
   width: 100%;
   overflow-x: auto;
 }
 
-/* Evita que las columnas se compriman demasiado */
 .table-responsive table {
   width: 100%;
   min-width: 1050px;
   border-collapse: collapse;
 }
 
-/* Mantiene el NIT y teléfono en una sola línea */
 .table-responsive td:nth-child(3),
 .table-responsive td:nth-child(4) {
   white-space: nowrap;
 }
 
-/* Centrar los botones Editar, Activar y Desactivar */
 .actions-container {
   display: flex;
   justify-content: center;
@@ -790,7 +592,6 @@ async function cambiarEstadoProveedor() {
   white-space: nowrap;
 }
 
-/* Centrar la última columna de la tabla */
 table th:last-child,
 table td:last-child {
   text-align: center;
@@ -821,18 +622,11 @@ td {
   border-bottom: 1px solid #f0eaf6;
 }
 
-/* Nombre del proveedor */
 .provider-name {
   font-weight: 700;
   color: #352057;
-
-  /* Evita que el nombre se divida en varias líneas */
   white-space: nowrap;
 }
-
-/* ========================================= */
-/* ESTADO DEL PROVEEDOR                     */
-/* ========================================= */
 
 .status-badge {
   display: inline-block;
@@ -852,10 +646,6 @@ td {
   color: #b54c5b;
 }
 
-/* ========================================= */
-/* BOTONES DE ACCIONES                      */
-/* ========================================= */
-
 .btn-edit {
   border: 1px solid #e5d9f0;
   background: #f3ecfa;
@@ -872,10 +662,6 @@ td {
 .btn-edit:hover {
   background: #e8d9f5;
 }
-
-/* ========================================= */
-/* SIN REGISTROS                            */
-/* ========================================= */
 
 .empty-state {
   text-align: center;
@@ -898,12 +684,7 @@ td {
   font-size: 14px;
 }
 
-/* ========================================= */
-/* PANTALLAS PEQUEÑAS                       */
-/* ========================================= */
-
 @media (max-width: 768px) {
-
   .proveedores-page {
     padding: 20px;
   }
@@ -927,10 +708,6 @@ td {
   }
 }
 
-/* ========================================= */
-/* BOTONES ACTIVAR Y DESACTIVAR              */
-/* ========================================= */
-
 .btn-status {
   border: none;
   padding: 9px 14px;
@@ -941,7 +718,6 @@ td {
   white-space: nowrap;
 }
 
-/* Desactivar */
 .btn-deactivate {
   background: #fcebed;
   color: #b54c5b;
@@ -951,7 +727,6 @@ td {
   background: #f8dce0;
 }
 
-/* Activar */
 .btn-activate {
   background: #e9f7ee;
   color: #27834b;
@@ -960,10 +735,6 @@ td {
 .btn-activate:hover {
   background: #d5efde;
 }
-
-/* ========================================= */
-/* FONDO DE LA VENTANA DE CONFIRMACIÓN       */
-/* ========================================= */
 
 .confirmation-overlay {
   position: fixed;
@@ -977,7 +748,6 @@ td {
   backdrop-filter: blur(5px);
 }
 
-/* Ventana */
 .confirmation-card {
   width: 100%;
   max-width: 440px;
@@ -989,7 +759,6 @@ td {
   box-shadow: 0 24px 70px rgba(45, 25, 75, 0.2);
 }
 
-/* Icono */
 .confirmation-icon {
   display: flex;
   align-items: center;
@@ -1004,14 +773,12 @@ td {
   font-weight: bold;
 }
 
-/* Título */
 .confirmation-card h2 {
   margin-bottom: 15px;
   color: #352057;
   font-size: 23px;
 }
 
-/* Mensajes */
 .confirmation-card p {
   color: #826d99;
   font-size: 14px;
@@ -1027,7 +794,6 @@ td {
   color: #a18fb4 !important;
 }
 
-/* Botones */
 .confirmation-actions {
   display: flex;
   gap: 12px;
@@ -1070,10 +836,6 @@ td {
     flex-direction: column;
   }
 }
-
-/* =========================================
-   PAGINACIÓN DE PROVEEDORES
-   ========================================= */
 
 .pagination-container {
   display: flex;

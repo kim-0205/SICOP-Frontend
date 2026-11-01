@@ -4,12 +4,6 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import logoSicop from '../assets/logo-sicop.png'
 
-// SICOP - Menú lateral de navegación.
-// Módulos habilitados:
-// Dashboard, Proveedores, Facturas de compra,
-// Pagos, Estados de Cuenta y Usuarios.
-
-// Recupera los datos del usuario autenticado.
 const usuarioSesion = computed(() => {
   const datos = sessionStorage.getItem('sicop_usuario')
 
@@ -27,28 +21,21 @@ const usuarioSesion = computed(() => {
   }
 })
 
-// Solo el Administrador General puede ver el módulo Usuarios.
 const esAdministrador = computed(() =>
   usuarioSesion.value?.rolId === 1
 )
-
-// La información del usuario y el cierre de sesión
-// se administran desde Header.vue.
 </script>
-
 
 <template>
   <aside class="sidebar">
-
-    <!-- Identidad del sistema -->
     <div class="sidebar-brand">
-     <div class="brand-icon">
-  <img
-    :src="logoSicop"
-    alt="Logo de SICOP"
-    class="logo-sicop"
-  />
-</div>
+      <div class="brand-icon">
+        <img
+          :src="logoSicop"
+          alt="Logo de SICOP"
+          class="logo-sicop"
+        />
+      </div>
 
       <div>
         <h2>SICOP</h2>
@@ -56,9 +43,7 @@ const esAdministrador = computed(() =>
       </div>
     </div>
 
-    <!-- Menú principal -->
     <nav class="sidebar-nav" aria-label="Menú principal">
-
       <p class="menu-label">MENÚ PRINCIPAL</p>
 
       <RouterLink to="/dashboard" class="nav-item">
@@ -66,60 +51,50 @@ const esAdministrador = computed(() =>
         <span>Panel principal</span>
       </RouterLink>
 
-      <!-- Módulos de administración -->
       <p class="menu-label section-label">ADMINISTRACIÓN</p>
 
-      <!-- NUEVO: Proveedores habilitado -->
       <RouterLink to="/proveedores" class="nav-item">
         <span class="nav-icon">♙</span>
         <span>Proveedores</span>
       </RouterLink>
 
-      <!-- NUEVO: Facturas de compra habilitado -->
       <RouterLink to="/facturas" class="nav-item">
         <span class="nav-icon">▤</span>
         <span>Facturas de compra</span>
       </RouterLink>
 
-      <!-- NUEVO: Pagos habilitado -->
       <RouterLink to="/pagos" class="nav-item">
         <span class="nav-icon">◈</span>
         <span>Pagos</span>
       </RouterLink>
 
-     <!-- Solo el Administrador General puede ver este módulo. -->
-<RouterLink
-  v-if="esAdministrador"
-  to="/usuarios"
-  class="nav-item"
->
-  <span class="nav-icon">♧</span>
-  <span>Usuarios</span>
-</RouterLink>
+      <RouterLink
+        v-if="esAdministrador"
+        to="/usuarios"
+        class="nav-item"
+      >
+        <span class="nav-icon">♧</span>
+        <span>Usuarios</span>
+      </RouterLink>
 
-<!-- Consulta de estados de cuenta por proveedor -->
-<RouterLink to="/estados-cuenta" class="nav-item">
-  <span class="nav-icon">▥</span>
-  <span>Estados de Cuenta</span>
-</RouterLink>
+      <RouterLink to="/estados-cuenta" class="nav-item">
+        <span class="nav-icon">▥</span>
+        <span>Estados de Cuenta</span>
+      </RouterLink>
 
-<!-- Visible únicamente para el Administrador General -->
-<RouterLink
-  v-if="esAdministrador"
-  to="/parametros-sistema"
-  class="nav-item"
->
-  <span class="nav-icon">⚙</span>
-  <span>Parámetros del Sistema</span>
-</RouterLink>
-
+      <RouterLink
+        v-if="esAdministrador"
+        to="/parametros-sistema"
+        class="nav-item"
+      >
+        <span class="nav-icon">⚙</span>
+        <span>Parámetros del Sistema</span>
+      </RouterLink>
     </nav>
-
   </aside>
 </template>
 
 <style scoped>
-/* Contenedor principal del menú */
 .sidebar {
   width: 260px;
   min-height: 100vh;
@@ -133,7 +108,6 @@ const esAdministrador = computed(() =>
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 
-/* Logotipo */
 .sidebar-brand {
   display: flex;
   align-items: center;
@@ -152,7 +126,6 @@ const esAdministrador = computed(() =>
   border-radius: 12px;
 }
 
-/* Logo oficial de SICOP */
 .logo-sicop {
   width: 100%;
   height: 100%;
@@ -171,7 +144,6 @@ const esAdministrador = computed(() =>
   font-size: 11px;
 }
 
-/* Navegación */
 .sidebar-nav {
   flex: 1;
   padding-top: 26px;
@@ -209,25 +181,21 @@ const esAdministrador = computed(() =>
   text-align: center;
 }
 
-/* Elemento seleccionado */
 .nav-item.router-link-active {
   background: #7551a7;
   color: white;
   font-weight: 600;
 }
 
-/* Efecto al pasar el cursor */
 a.nav-item:hover {
   background: rgba(255, 255, 255, 0.12);
   color: white;
 }
 
-/* Opciones todavía no disponibles */
 .nav-disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-
 
 .user-info {
   display: flex;
@@ -263,7 +231,6 @@ a.nav-item:hover {
   color: #cbb8e6;
 }
 
-/* Regresar al Login */
 .logout-button {
   display: flex;
   align-items: center;
@@ -285,8 +252,6 @@ a.nav-item:hover {
   background: rgba(255, 255, 255, 0.12);
 }
 
-/* Ajuste para pantallas pequeñas.
-   Posteriormente implementaremos el menú móvil. */
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;

@@ -1,24 +1,19 @@
 
-
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiPost } from '@/services/api'
 import logoSicop from '@/assets/logo-sicop.png'
 
-// Permite navegar después de iniciar sesión.
 const router = useRouter()
 
-// Datos que ingresará el usuario.
 const usuario = ref('')
 const contrasena = ref('')
 const mostrarContrasena = ref(false)
 
-// Controla el estado del formulario.
 const cargando = ref(false)
 const error = ref('')
 
-// Estructura que devuelve nuestro backend .NET.
 interface LoginRespuestaDto {
   token: string
   expiracion: string
@@ -28,13 +23,11 @@ interface LoginRespuestaDto {
   rolId: number
 }
 
-// Autenticación real mediante JWT.
 async function iniciarSesion() {
   error.value = ''
   cargando.value = true
 
   try {
-    // Envía las credenciales al backend.
     const respuesta = await apiPost<LoginRespuestaDto>(
       '/api/Auth/login',
       {
@@ -43,10 +36,8 @@ async function iniciarSesion() {
       }
     )
 
-    // Guarda el token durante la sesión del navegador.
     sessionStorage.setItem('sicop_token', respuesta.token)
 
-    // Guarda la información básica del usuario.
     sessionStorage.setItem(
       'sicop_usuario',
       JSON.stringify({
@@ -57,11 +48,8 @@ async function iniciarSesion() {
       })
     )
 
-    // Redirige al panel principal.
     await router.push('/dashboard')
-
   } catch (e) {
-    // Evita conservar una sesión anterior inválida.
     sessionStorage.removeItem('sicop_token')
     sessionStorage.removeItem('sicop_usuario')
 
@@ -75,25 +63,21 @@ async function iniciarSesion() {
 }
 </script>
 
-
 <template>
   <main class="login-page">
     <div class="login-container">
-
-      <!-- Panel izquierdo: presentación del sistema -->
       <section class="login-brand">
-       <!-- Logo oficial del sistema SICOP -->
-<div class="brand-logo">
-  <div class="logo-icon">
-    <img
-      :src="logoSicop"
-      alt="Logo de SICOP"
-      class="logo-sicop"
-    />
-  </div>
+        <div class="brand-logo">
+          <div class="logo-icon">
+            <img
+              :src="logoSicop"
+              alt="Logo de SICOP"
+              class="logo-sicop"
+            />
+          </div>
 
-  <span>SICOP</span>
-</div>
+          <span>SICOP</span>
+        </div>
 
         <div class="brand-content">
           <span class="brand-label">SISTEMA ADMINISTRATIVO</span>
@@ -120,10 +104,8 @@ async function iniciarSesion() {
         </p>
       </section>
 
-      <!-- Panel derecho: formulario de acceso -->
       <section class="login-form-panel">
         <div class="form-wrapper">
-
           <div class="welcome-icon">✦</div>
 
           <h2>¡Bienvenido!</h2>
@@ -133,8 +115,6 @@ async function iniciarSesion() {
           </p>
 
           <form @submit.prevent="iniciarSesion">
-
-            <!-- Campo de usuario -->
             <div class="form-group">
               <label for="usuario">Usuario</label>
 
@@ -148,7 +128,6 @@ async function iniciarSesion() {
               />
             </div>
 
-            <!-- Campo de contraseña -->
             <div class="form-group">
               <label for="contrasena">Contraseña</label>
 
@@ -162,69 +141,64 @@ async function iniciarSesion() {
                   required
                 />
 
-                <!-- Permite mostrar u ocultar la contraseña -->
-<button
-  type="button"
-  class="toggle-password"
-  :aria-label="mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'"
-  :aria-pressed="mostrarContrasena"
-  @click="mostrarContrasena = !mostrarContrasena"
->
-  <!-- Ojo abierto: contraseña visible -->
-  <svg
-    v-if="mostrarContrasena"
-    xmlns="http://www.w3.org/2000/svg"
-    width="22"
-    height="22"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
+                <button
+                  type="button"
+                  class="toggle-password"
+                  :aria-label="mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                  :aria-pressed="mostrarContrasena"
+                  @click="mostrarContrasena = !mostrarContrasena"
+                >
+                  <svg
+                    v-if="mostrarContrasena"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
 
-  <!-- Ojo cerrado: contraseña oculta -->
-  <svg
-    v-else
-    xmlns="http://www.w3.org/2000/svg"
-    width="22"
-    height="22"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
-    <path d="m15 18-.722-3.25"/>
-    <path d="M2 8a10.645 10.645 0 0 0 20 0"/>
-    <path d="m20 15-1.726-2.05"/>
-    <path d="m4 15 1.726-2.05"/>
-    <path d="m9 18 .722-3.25"/>
-  </svg>
-</button>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m15 18-.722-3.25"/>
+                    <path d="M2 8a10.645 10.645 0 0 0 20 0"/>
+                    <path d="m20 15-1.726-2.05"/>
+                    <path d="m4 15 1.726-2.05"/>
+                    <path d="m9 18 .722-3.25"/>
+                  </svg>
+                </button>
               </div>
             </div>
 
-            <!-- Inicia sesión utilizando la autenticación JWT del backend. -->
-                  <button
-                    type="submit"
-                    class="login-button"
-                    :disabled="cargando"
-                  >
-                    {{ cargando ? 'Iniciando sesión...' : 'Iniciar sesión' }}
-                  </button>
+            <button
+              type="submit"
+              class="login-button"
+              :disabled="cargando"
+            >
+              {{ cargando ? 'Iniciando sesión...' : 'Iniciar sesión' }}
+            </button>
 
-                  <!-- Muestra los errores devueltos durante la autenticación. -->
-                  <p v-if="error" role="alert">
-                    {{ error }}
-                  </p>
+            <p v-if="error" role="alert">
+              {{ error }}
+            </p>
           </form>
 
           <p class="security-text">
@@ -236,13 +210,11 @@ async function iniciarSesion() {
           © 2026 SICOP. Todos los derechos reservados.
         </p>
       </section>
-
     </div>
   </main>
 </template>
 
 <style scoped>
-/* Página principal del login */
 .login-page {
   min-height: 100vh;
   min-height: 100dvh;
@@ -255,7 +227,6 @@ async function iniciarSesion() {
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 
-/* Contenedor de los dos paneles */
 .login-container {
   width: 100%;
   max-width: 1000px;
@@ -269,7 +240,6 @@ async function iniciarSesion() {
   box-shadow: 0 20px 60px rgba(73, 48, 120, 0.14);
 }
 
-/* Panel izquierdo */
 .login-brand {
   background: linear-gradient(145deg, #493078, #7551a7);
   color: white;
@@ -288,7 +258,6 @@ async function iniciarSesion() {
   letter-spacing: 1px;
 }
 
-/* Contenedor del logo oficial */
 .logo-icon {
   width: 54px;
   height: 54px;
@@ -300,7 +269,6 @@ async function iniciarSesion() {
   overflow: hidden;
 }
 
-/* Imagen del logo SICOP */
 .logo-sicop {
   width: 100%;
   height: 100%;
@@ -344,7 +312,6 @@ async function iniciarSesion() {
   color: #d7c4ec;
 }
 
-/* Panel derecho */
 .login-form-panel {
   padding: 28px 36px;
   display: flex;
@@ -418,12 +385,10 @@ input:focus {
   position: relative;
 }
 
-/* Espacio para el ícono del ojo */
 .password-field input {
   padding-right: 58px;
 }
 
- /* Botón para mostrar u ocultar contraseña */
 .toggle-password {
   position: absolute;
   right: 14px;
@@ -447,13 +412,11 @@ input:focus {
   transition: color 0.2s, background 0.2s;
 }
 
-/* Efecto al pasar el cursor */
 .toggle-password:hover {
   color: #493078;
   background: #f0e8f8;
 }
 
-/* Accesibilidad al navegar con teclado */
 .toggle-password:focus-visible {
   outline: 2px solid #7551a7;
   outline-offset: 2px;
@@ -489,7 +452,6 @@ input:focus {
   font-size: 12px;
 }
 
-/* Diseño adaptable a celulares */
 @media (max-width: 768px) {
   .login-page {
     padding: 14px;
@@ -528,7 +490,6 @@ input:focus {
   }
 }
 
-/* Ajustes para computadoras con pantallas de poca altura */
 @media (min-width: 769px) and (max-height: 750px) {
   .login-container {
     height: auto;
