@@ -3,12 +3,18 @@
 import { onMounted, ref, computed, watch } from 'vue'
 import { apiGet } from '../../services/api'
 
+// =============================================
+// SICOP - ESTADOS DE CUENTA POR PROVEEDOR
+// =============================================
+
+// Datos del proveedor.
 interface Proveedor {
   proveedorId: number
   nombre: string
   nit: string
 }
 
+// Movimientos financieros.
 interface MovimientoEstadoCuenta {
   fecha: string
   facturaCompraId: number
@@ -23,6 +29,7 @@ interface MovimientoEstadoCuenta {
   motivoAnulacion: string | null
 }
 
+// Respuesta del backend .NET.
 interface EstadoCuentaRespuesta {
   proveedorId: number
   nombreProveedor: string
@@ -35,21 +42,36 @@ interface EstadoCuentaRespuesta {
   movimientos: MovimientoEstadoCuenta[]
 }
 
+// =============================================
+// VARIABLES REACTIVAS
+// =============================================
+
 const proveedores = ref<Proveedor[]>([])
 const proveedorId = ref<number | null>(null)
+
 const estadoCuenta = ref<EstadoCuentaRespuesta | null>(null)
 
+  // =============================================
+// PAGINACIÓN DE ESTADOS DE CUENTA
+// =============================================
+
+// Cantidad de movimientos por página.
 const registrosPorPagina = 5
+
+// Página actual.
 const paginaActual = ref(1)
 
+// Total de movimientos del proveedor seleccionado.
 const totalMovimientos = computed(() =>
   estadoCuenta.value?.movimientos.length ?? 0
 )
 
+// Calcular el total de páginas.
 const totalPaginas = computed(() =>
   Math.max(1, Math.ceil(totalMovimientos.value / registrosPorPagina))
 )
 
+// Obtener los movimientos de la página actual.
 const movimientosPaginados = computed(() => {
   const inicio = (paginaActual.value - 1) * registrosPorPagina
 
@@ -59,16 +81,19 @@ const movimientosPaginados = computed(() => {
   ) ?? []
 })
 
+// Cambiar de página.
 function cambiarPagina(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginas.value) {
     paginaActual.value = pagina
   }
 }
 
+// Regresar a la primera página al cambiar de proveedor.
 watch(proveedorId, () => {
   paginaActual.value = 1
 })
 
+// Evitar permanecer en una página inexistente.
 watch(totalPaginas, (total) => {
   if (paginaActual.value > total) {
     paginaActual.value = total
@@ -77,7 +102,12 @@ watch(totalPaginas, (total) => {
 
 const cargandoProveedores = ref(false)
 const cargandoEstadoCuenta = ref(false)
+
 const error = ref('')
+
+// =============================================
+// CONSULTAR PROVEEDORES
+// =============================================
 
 async function cargarProveedores() {
   cargandoProveedores.value = true
@@ -94,6 +124,10 @@ async function cargarProveedores() {
     cargandoProveedores.value = false
   }
 }
+
+// =============================================
+// CONSULTAR ESTADO DE CUENTA
+// =============================================
 
 async function consultarEstadoCuenta() {
   if (proveedorId.value === null) {
@@ -117,6 +151,11 @@ async function consultarEstadoCuenta() {
   }
 }
 
+// =============================================
+// FORMATO DE MONEDA Y FECHAS
+// =============================================
+
+// Convierte cantidades a quetzales.
 function formatoMoneda(valor: number): string {
   return new Intl.NumberFormat('es-GT', {
     style: 'currency',
@@ -124,11 +163,13 @@ function formatoMoneda(valor: number): string {
   }).format(valor)
 }
 
+// Convierte fechas a DD/MM/AAAA.
 function formatoFecha(fecha: string): string {
   const [anio, mes, dia] = fecha.substring(0, 10).split('-')
   return `${dia}/${mes}/${anio}`
 }
 
+// Evita insertar HTML no confiable en el PDF.
 function escaparHTML(valor: unknown): string {
   return String(valor ?? '')
     .replace(/&/g, '&amp;')
@@ -138,6 +179,10 @@ function escaparHTML(valor: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
+// =============================================
+// IMPRIMIR / GUARDAR PDF
+// =============================================
+
 function imprimirEstadoCuenta() {
   const datos = estadoCuenta.value
 
@@ -145,6 +190,7 @@ function imprimirEstadoCuenta() {
     return
   }
 
+  // Construye un nombre de archivo seguro.
   const nombreProveedor = datos.nombreProveedor
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -156,6 +202,7 @@ function imprimirEstadoCuenta() {
   const nombreArchivo =
     `SICOP_Estado_de_Cuenta_${nombreProveedor}_${fechaArchivo}`
 
+  // Abre una ventana exclusiva para el documento.
   const ventana = window.open('', '_blank')
 
   if (!ventana) {
@@ -163,6 +210,7 @@ function imprimirEstadoCuenta() {
     return
   }
 
+  // Construye las filas de la tabla con datos reales.
   const filas = datos.movimientos.map((movimiento) => {
     const tipo = movimiento.anulado
       ? `${movimiento.tipoMovimiento} (Anulado)`
@@ -195,6 +243,7 @@ function imprimirEstadoCuenta() {
     `
   }).join('')
 
+  // Documento independiente, sin Sidebar ni Header.
   const documento = `
 <!DOCTYPE html>
 <html lang="es">
@@ -203,340 +252,352 @@ function imprimirEstadoCuenta() {
   <title>${escaparHTML(nombreArchivo)}</title>
 
   <style>
-    @page {
-      size: A4 landscape;
-      margin: 14mm;
-    }
+    
+@page {
+  size: A4 landscape;
+  margin: 14mm;
+}
 
-    * {
-      box-sizing: border-box;
-    }
+* {
+  box-sizing: border-box;
+}
 
-    html {
-      background: #eef0f5;
-    }
+html {
+  background: #eef0f5;
+}
 
-    body {
-      margin: 0;
-      padding: 35px;
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 13px;
-      line-height: 1.5;
-      color: #33234d;
-      background: #eef0f5;
-    }
+body {
+  margin: 0;
+  padding: 35px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #33234d;
+  background: #eef0f5;
+}
 
-    .reporte {
-      width: 100%;
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 38px 42px;
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 8px 35px rgba(40, 30, 70, 0.10);
-    }
+/* Hoja del reporte */
+.reporte {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 38px 42px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 35px rgba(40, 30, 70, 0.10);
+}
 
-    .encabezado {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 30px;
-      padding-bottom: 20px;
-      margin-bottom: 28px;
-      border-bottom: 3px solid #493078;
-    }
+/* Encabezado */
+.encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 30px;
+  padding-bottom: 20px;
+  margin-bottom: 28px;
+  border-bottom: 3px solid #493078;
+}
 
-    .marca {
-      color: #493078;
-      font-size: 30px;
-      font-weight: 800;
-      letter-spacing: 1px;
-    }
+.marca {
+  color: #493078;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
 
-    .subtitulo {
-      margin-top: 4px;
-      color: #89799d;
-      font-size: 13px;
-    }
+.subtitulo {
+  margin-top: 4px;
+  color: #89799d;
+  font-size: 13px;
+}
 
-    .titulo {
-      text-align: right;
-    }
+.titulo {
+  text-align: right;
+}
 
-    .titulo h1 {
-      margin: 0 0 6px;
-      color: #493078;
-      font-size: 25px;
-    }
+.titulo h1 {
+  margin: 0 0 6px;
+  color: #493078;
+  font-size: 25px;
+}
 
-    .titulo p {
-      margin: 0;
-      color: #89799d;
-      font-size: 12px;
-    }
+.titulo p {
+  margin: 0;
+  color: #89799d;
+  font-size: 12px;
+}
 
-    .proveedor {
-      display: flex;
-      justify-content: space-between;
-      gap: 30px;
-      margin-bottom: 28px;
-    }
+/* Proveedor */
+.proveedor {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 28px;
+}
 
-    .etiqueta {
-      color: #89799d;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
+.etiqueta {
+  color: #89799d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
 
-    .proveedor h2 {
-      margin: 8px 0;
-      color: #493078;
-      font-size: 22px;
-    }
+.proveedor h2 {
+  margin: 8px 0;
+  color: #493078;
+  font-size: 22px;
+}
 
-    .proveedor p {
-      margin: 4px 0;
-      color: #59496d;
-    }
+.proveedor p {
+  margin: 4px 0;
+  color: #59496d;
+}
 
-    .fecha {
-      text-align: right;
-    }
+.fecha {
+  text-align: right;
+}
 
-    .fecha strong {
-      display: block;
-      margin-top: 8px;
-      font-size: 15px;
-    }
+.fecha strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 15px;
+}
 
-    .resumen {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 15px;
-      margin-bottom: 30px;
-    }
+/* Resumen financiero */
+.resumen {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 15px;
+  margin-bottom: 30px;
+}
 
-    .tarjeta {
-      min-width: 0;
-      padding: 20px 16px;
-      border: 1px solid #e5dcef;
-      border-radius: 12px;
-      background: #ffffff;
-      break-inside: avoid;
-    }
+.tarjeta {
+  min-width: 0;
+  padding: 20px 16px;
+  border: 1px solid #e5dcef;
+  border-radius: 12px;
+  background: #ffffff;
+  break-inside: avoid;
+}
 
-    .tarjeta span {
-      display: block;
-      margin-bottom: 10px;
-      color: #89799d;
-      font-size: 12px;
-    }
+.tarjeta span {
+  display: block;
+  margin-bottom: 10px;
+  color: #89799d;
+  font-size: 12px;
+}
 
-    .tarjeta strong {
-      display: block;
-      color: #493078;
-      font-size: 21px;
-      white-space: nowrap;
-    }
+.tarjeta strong {
+  display: block;
+  color: #493078;
+  font-size: 21px;
+  white-space: nowrap;
+}
 
-    .destacada {
-      border: 2px solid #7551a7;
-      background: #faf7fe;
-    }
+.destacada {
+  border: 2px solid #7551a7;
+  background: #faf7fe;
+}
 
-    .seccion {
-      margin-bottom: 15px;
-      color: #493078;
-      font-size: 18px;
-      font-weight: 700;
-    }
+/* Historial */
+.seccion {
+  margin-bottom: 15px;
+  color: #493078;
+  font-size: 18px;
+  font-weight: 700;
+}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 12px;
-    }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
 
-    thead {
-      display: table-header-group;
-    }
+thead {
+  display: table-header-group;
+}
 
-    th {
-      padding: 13px 9px;
-      background: #eee5f7;
-      color: #493078;
-      text-align: left;
-      font-size: 11px;
-      font-weight: 700;
-    }
+th {
+  padding: 13px 9px;
+  background: #eee5f7;
+  color: #493078;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+}
 
-    td {
-      padding: 13px 9px;
-      border-bottom: 1px solid #eee5f7;
-      color: #59496d;
-      vertical-align: top;
-      overflow-wrap: anywhere;
-    }
+td {
+  padding: 13px 9px;
+  border-bottom: 1px solid #eee5f7;
+  color: #59496d;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
 
-    th:nth-child(1) { width: 11%; }
-    th:nth-child(2) { width: 15%; }
-    th:nth-child(3) { width: 11%; }
-    th:nth-child(4) { width: 27%; }
-    th:nth-child(5) { width: 12%; }
-    th:nth-child(6) { width: 11%; }
-    th:nth-child(7) { width: 13%; }
+th:nth-child(1) { width: 11%; }
+th:nth-child(2) { width: 15%; }
+th:nth-child(3) { width: 11%; }
+th:nth-child(4) { width: 27%; }
+th:nth-child(5) { width: 12%; }
+th:nth-child(6) { width: 11%; }
+th:nth-child(7) { width: 13%; }
 
-    .numero {
-      text-align: right;
-      white-space: nowrap;
-    }
+.numero {
+  text-align: right;
+  white-space: nowrap;
+}
 
-    .saldo {
-      color: #493078;
-      font-weight: 700;
-    }
+.saldo {
+  color: #493078;
+  font-weight: 700;
+}
 
-    tr {
-      break-inside: avoid;
-    }
+tr {
+  break-inside: avoid;
+}
 
-    .saldo-final {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 25px;
-      margin-top: 24px;
-      padding: 18px 0;
-      border-top: 2px solid #493078;
-      break-inside: avoid;
-    }
+/* Saldo final */
+.saldo-final {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 25px;
+  margin-top: 24px;
+  padding: 18px 0;
+  border-top: 2px solid #493078;
+  break-inside: avoid;
+}
 
-    .saldo-final span {
-      font-size: 15px;
-    }
+.saldo-final span {
+  font-size: 15px;
+}
 
-    .saldo-final strong {
-      color: #493078;
-      font-size: 25px;
-    }
+.saldo-final strong {
+  color: #493078;
+  font-size: 25px;
+}
 
-    .pie {
-      margin-top: 25px;
-      padding-top: 14px;
-      border-top: 1px solid #eee5f7;
-      color: #89799d;
-      text-align: center;
-      font-size: 10px;
-    }
+/* Pie */
+.pie {
+  margin-top: 25px;
+  padding-top: 14px;
+  border-top: 1px solid #eee5f7;
+  color: #89799d;
+  text-align: center;
+  font-size: 10px;
+}
 
-    .acciones {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      max-width: 1120px;
-      margin: 0 auto 20px;
-    }
+/* Botones de la ventana */
+.acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  max-width: 1120px;
+  margin: 0 auto 20px;
+}
 
-    .acciones button {
-      padding: 12px 22px;
-      border: none;
-      border-radius: 9px;
-      background: #7551a7;
-      color: white;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
+.acciones button {
+  padding: 12px 22px;
+  border: none;
+  border-radius: 9px;
+  background: #7551a7;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
 
-    .acciones button.secundario {
-      background: #e9dff3;
-      color: #493078;
-    }
+.acciones button.secundario {
+  background: #e9dff3;
+  color: #493078;
+}
 
-    @media print {
-      @page {
-        size: A4 landscape;
-        margin: 12mm;
-      }
+/* Configuración exclusiva para PDF */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
 
-      html,
-      body {
-        width: auto;
-        margin: 0;
-        padding: 0;
-        background: white;
-      }
+  html,
+  body {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
 
-      .reporte {
-        width: 100%;
-        max-width: none;
-        margin: 0;
-        padding: 0;
-        border-radius: 0;
-        box-shadow: none;
-      }
+  .reporte {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 
-      .acciones {
-        display: none !important;
-      }
+  .acciones {
+    display: none !important;
+  }
 
-      .encabezado {
-        margin-bottom: 18px;
-        padding-bottom: 12px;
-      }
+  .encabezado {
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+  }
 
-      .proveedor {
-        margin-bottom: 18px;
-      }
+  .proveedor {
+    margin-bottom: 18px;
+  }
 
-      .resumen {
-        gap: 10px;
-        margin-bottom: 20px;
-      }
+  .resumen {
+    gap: 10px;
+    margin-bottom: 20px;
+  }
 
-      .tarjeta {
-        padding: 12px;
-      }
+  .tarjeta {
+    padding: 12px;
+  }
 
-      .tarjeta strong {
-        font-size: 17px;
-      }
+  .tarjeta strong {
+    font-size: 17px;
+  }
 
-      .seccion {
-        margin-bottom: 10px;
-        font-size: 15px;
-      }
+  .seccion {
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
 
-      table {
-        font-size: 10px;
-      }
+  table {
+    font-size: 10px;
+  }
 
-      th,
-      td {
-        padding: 8px 6px;
-      }
+  th,
+  td {
+    padding: 8px 6px;
+  }
 
-      .saldo-final {
-        margin-top: 14px;
-        padding: 12px 0;
-      }
+  .saldo-final {
+    margin-top: 14px;
+    padding: 12px 0;
+  }
 
-      .saldo-final strong {
-        font-size: 20px;
-      }
+  .saldo-final strong {
+    font-size: 20px;
+  }
 
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-    }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
   </style>
 </head>
 
 <body>
+
   <div class="acciones">
     <button onclick="window.print()">
       Imprimir / Guardar PDF
@@ -546,113 +607,117 @@ function imprimirEstadoCuenta() {
       Cerrar
     </button>
   </div>
-
-  <div class="reporte">
-    <header class="encabezado">
-      <div>
-        <div class="marca">◆ SICOP</div>
-        <div class="subtitulo">
-          Sistema de Cuentas por Pagar
-        </div>
+<div class="reporte">
+  <header class="encabezado">
+    <div>
+      <div class="marca">◆ SICOP</div>
+      <div class="subtitulo">
+        Sistema de Cuentas por Pagar
       </div>
-
-      <div class="titulo">
-        <h1>Estado de Cuenta</h1>
-        <p>Reporte financiero por proveedor</p>
-      </div>
-    </header>
-
-    <section class="proveedor">
-      <div>
-        <div class="etiqueta">Proveedor</div>
-        <h2>${escaparHTML(datos.nombreProveedor)}</h2>
-        <p>NIT: ${escaparHTML(datos.nit)}</p>
-      </div>
-
-      <div class="fecha">
-        <div class="etiqueta">Fecha de consulta</div>
-        <strong>
-          ${escaparHTML(formatoFecha(datos.fechaConsulta))}
-        </strong>
-      </div>
-    </section>
-
-    <section class="resumen">
-      <div class="tarjeta">
-        <span>Facturas vigentes</span>
-        <strong>${datos.totalFacturas}</strong>
-      </div>
-
-      <div class="tarjeta">
-        <span>Total facturado</span>
-        <strong>${escaparHTML(formatoMoneda(datos.totalFacturado))}</strong>
-      </div>
-
-      <div class="tarjeta">
-        <span>Total pagado</span>
-        <strong>${escaparHTML(formatoMoneda(datos.totalPagado))}</strong>
-      </div>
-
-      <div class="tarjeta destacada">
-        <span>Saldo pendiente</span>
-        <strong>${escaparHTML(formatoMoneda(datos.saldoPendiente))}</strong>
-      </div>
-    </section>
-
-    <div class="seccion">
-      Historial de movimientos (${datos.movimientos.length})
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Factura</th>
-          <th>Movimiento</th>
-          <th>Descripción</th>
-          <th class="numero">Cargo</th>
-          <th class="numero">Abono</th>
-          <th class="numero">Saldo acumulado</th>
-        </tr>
-      </thead>
+    <div class="titulo">
+      <h1>Estado de Cuenta</h1>
+      <p>Reporte financiero por proveedor</p>
+    </div>
+  </header>
 
-      <tbody>
-        ${filas || `
-          <tr>
-            <td colspan="7" style="text-align:center;padding:20px;">
-              No hay movimientos registrados.
-            </td>
-          </tr>
-        `}
-      </tbody>
-    </table>
+  <section class="proveedor">
+    <div>
+      <div class="etiqueta">Proveedor</div>
+      <h2>${escaparHTML(datos.nombreProveedor)}</h2>
+      <p>NIT: ${escaparHTML(datos.nit)}</p>
+    </div>
 
-    <div class="saldo-final">
-      <span>Saldo pendiente actual</span>
+    <div class="fecha">
+      <div class="etiqueta">Fecha de consulta</div>
       <strong>
-        ${escaparHTML(formatoMoneda(datos.saldoPendiente))}
+        ${escaparHTML(formatoFecha(datos.fechaConsulta))}
       </strong>
     </div>
+  </section>
 
-    <footer class="pie">
-      SICOP - Sistema de Cuentas por Pagar
-      | Estado de cuenta generado para consulta financiera.
-    </footer>
+  <section class="resumen">
+    <div class="tarjeta">
+      <span>Facturas vigentes</span>
+      <strong>${datos.totalFacturas}</strong>
+    </div>
+
+    <div class="tarjeta">
+      <span>Total facturado</span>
+      <strong>${escaparHTML(formatoMoneda(datos.totalFacturado))}</strong>
+    </div>
+
+    <div class="tarjeta">
+      <span>Total pagado</span>
+      <strong>${escaparHTML(formatoMoneda(datos.totalPagado))}</strong>
+    </div>
+
+    <div class="tarjeta destacada">
+      <span>Saldo pendiente</span>
+      <strong>${escaparHTML(formatoMoneda(datos.saldoPendiente))}</strong>
+    </div>
+  </section>
+
+  <div class="seccion">
+    Historial de movimientos (${datos.movimientos.length})
   </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Factura</th>
+        <th>Movimiento</th>
+        <th>Descripción</th>
+        <th class="numero">Cargo</th>
+        <th class="numero">Abono</th>
+        <th class="numero">Saldo acumulado</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      ${filas || `
+        <tr>
+          <td colspan="7" style="text-align:center;padding:20px;">
+            No hay movimientos registrados.
+          </td>
+        </tr>
+      `}
+    </tbody>
+  </table>
+
+  <div class="saldo-final">
+    <span>Saldo pendiente actual</span>
+    <strong>
+      ${escaparHTML(formatoMoneda(datos.saldoPendiente))}
+    </strong>
+  </div>
+
+  <footer class="pie">
+    SICOP - Sistema de Cuentas por Pagar
+    | Estado de cuenta generado para consulta financiera.
+  </footer>
+  </div>
+
 </body>
 </html>
 `
 
+  // Escribe el documento completo.
   ventana.document.open()
   ventana.document.write(documento)
   ventana.document.close()
 }
 
+// Carga los proveedores al ingresar.
 onMounted(cargarProveedores)
 </script>
 
 <template>
   <main class="estados-cuenta">
+
+    <!-- Encabezado -->
     <header class="page-header">
       <div>
         <h1>Estados de Cuenta</h1>
@@ -667,6 +732,7 @@ onMounted(cargarProveedores)
       </span>
     </header>
 
+    <!-- Selección del proveedor -->
     <section class="content-card selector-card">
       <div>
         <h3>Consultar proveedor</h3>
@@ -706,6 +772,7 @@ onMounted(cargarProveedores)
       </div>
     </section>
 
+    <!-- Mensajes -->
     <div v-if="error" class="error-message" role="alert">
       {{ error }}
     </div>
@@ -714,7 +781,10 @@ onMounted(cargarProveedores)
       Consultando estado de cuenta...
     </div>
 
+    <!-- Estado de cuenta consultado -->
     <template v-if="estadoCuenta && !cargandoEstadoCuenta">
+
+      <!-- Datos del proveedor -->
       <section class="provider-info">
         <div>
           <span class="section-label">PROVEEDOR SELECCIONADO</span>
@@ -729,6 +799,7 @@ onMounted(cargarProveedores)
             {{ formatoFecha(estadoCuenta.fechaConsulta) }}
           </strong>
 
+          <!-- Genera un documento independiente -->
           <button
             type="button"
             class="print-button"
@@ -739,7 +810,9 @@ onMounted(cargarProveedores)
         </div>
       </section>
 
+      <!-- Resumen financiero -->
       <section class="stats-grid">
+
         <article class="stat-card">
           <div class="stat-icon">▤</div>
           <p>Facturas vigentes</p>
@@ -773,9 +846,12 @@ onMounted(cargarProveedores)
           </h2>
           <span>Deuda actual del proveedor</span>
         </article>
+
       </section>
 
+      <!-- Historial -->
       <section class="content-card movements-card">
+
         <div class="movements-header">
           <div>
             <h3>Historial de movimientos</h3>
@@ -876,52 +952,59 @@ onMounted(cargarProveedores)
           </table>
         </div>
 
-        <div
-          v-if="totalMovimientos > 0"
-          class="pagination-container"
-        >
-          <span class="pagination-info">
-            Mostrando
-            {{ (paginaActual - 1) * registrosPorPagina + 1 }}
-            -
-            {{ Math.min(paginaActual * registrosPorPagina, totalMovimientos) }}
-            de {{ totalMovimientos }} movimientos
-          </span>
+        <!-- ====================================== -->
+<!-- PAGINACIÓN DE ESTADOS DE CUENTA        -->
+<!-- ====================================== -->
 
-          <div class="pagination-buttons">
-            <button
-              type="button"
-              class="pagination-btn"
-              :disabled="paginaActual === 1"
-              @click="cambiarPagina(paginaActual - 1)"
-            >
-              ‹ Anterior
-            </button>
+<div
+  v-if="totalMovimientos > 0"
+  class="pagination-container"
+>
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, totalMovimientos) }}
+    de {{ totalMovimientos }} movimientos
+  </span>
 
-            <span class="pagination-current">
-              Página {{ paginaActual }} de {{ totalPaginas }}
-            </span>
+  <div class="pagination-buttons">
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
 
-            <button
-              type="button"
-              class="pagination-btn"
-              :disabled="paginaActual === totalPaginas"
-              @click="cambiarPagina(paginaActual + 1)"
-            >
-              Siguiente ›
-            </button>
-          </div>
-        </div>
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
 
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+  </div>
+</div>
+
+        <!-- Saldo final -->
         <div class="final-balance">
           <span>Saldo pendiente actual</span>
           <strong>
             {{ formatoMoneda(estadoCuenta.saldoPendiente) }}
           </strong>
         </div>
+
       </section>
     </template>
 
+    <!-- Pantalla inicial -->
     <section
       v-if="!estadoCuenta && !cargandoEstadoCuenta && !error"
       class="welcome-state"
@@ -933,10 +1016,14 @@ onMounted(cargarProveedores)
         sus facturas, pagos y saldo pendiente.
       </p>
     </section>
+
   </main>
 </template>
 
 <style scoped>
+/* =============================================
+   CONTENEDOR PRINCIPAL
+============================================= */
 .estados-cuenta {
   min-height: 100vh;
   padding: 36px;
@@ -944,6 +1031,7 @@ onMounted(cargarProveedores)
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 
+/* Encabezado */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -974,6 +1062,7 @@ onMounted(cargarProveedores)
   font-weight: 600;
 }
 
+/* Tarjetas generales */
 .content-card {
   background: white;
   border: 1px solid #eee5f7;
@@ -988,6 +1077,7 @@ onMounted(cargarProveedores)
   font-size: 18px;
 }
 
+/* Selector de proveedor */
 .selector-row {
   display: flex;
   gap: 14px;
@@ -1028,6 +1118,7 @@ onMounted(cargarProveedores)
   cursor: not-allowed;
 }
 
+/* Datos del proveedor */
 .provider-info {
   display: flex;
   justify-content: space-between;
@@ -1072,6 +1163,7 @@ onMounted(cargarProveedores)
   white-space: nowrap;
 }
 
+/* Tarjetas financieras */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1122,6 +1214,7 @@ onMounted(cargarProveedores)
   border-color: #d8c2ee;
 }
 
+/* Historial */
 .movements-header {
   display: flex;
   justify-content: space-between;
@@ -1228,6 +1321,7 @@ td {
   color: #89799d;
 }
 
+/* Saldo final */
 .final-balance {
   display: flex;
   justify-content: flex-end;
@@ -1241,6 +1335,7 @@ td {
   font-size: 22px;
 }
 
+/* Mensajes */
 .error-message {
   margin-bottom: 24px;
   padding: 15px;
@@ -1292,12 +1387,14 @@ td {
   line-height: 1.7;
 }
 
+/* Pantallas medianas */
 @media (max-width: 1100px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* Celulares */
 @media (max-width: 650px) {
   .estados-cuenta {
     padding: 20px;
@@ -1329,6 +1426,9 @@ td {
     gap: 8px;
   }
 }
+/* =========================================
+   PAGINACIÓN DE ESTADOS DE CUENTA
+   ========================================= */
 
 .pagination-container {
   display: flex;

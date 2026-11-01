@@ -4,11 +4,18 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { apiGet, apiPost, apiPut, apiPatch } from '@/services/api'
 import UsuarioModal from '../../components/UsuarioModal.vue'
 
+// ============================================
+// INTERFACES
+// ============================================
+
+// Representa un rol disponible en SICOP.
 interface Rol {
   rolId: number
   nombre: string
 }
 
+// Representa los datos visibles de un usuario.
+// No incluimos PasswordHash ni VersionToken.
 interface Usuario {
   usuarioId: number
   nombre: string
@@ -17,6 +24,7 @@ interface Usuario {
   activo: boolean
 }
 
+// Datos recibidos desde el formulario.
 interface DatosUsuario {
   usuarioId?: number
   nombre: string
@@ -27,38 +35,61 @@ interface DatosUsuario {
   enviarCorreo?: boolean
 }
 
+// ============================================
+// DATOS TEMPORALES
+// ============================================
+
+// Estos IDs son únicamente de prueba.
+// Posteriormente vendrán de SQL Server.
 const roles = ref<Rol[]>([
   { rolId: 1, nombre: 'Administrador General' },
   { rolId: 2, nombre: 'Operador' }
 ])
 
+
+// Usuarios reales obtenidos desde SQL Server.
 const usuarios = ref<Usuario[]>([])
+
+// Estado de la consulta.
 const cargandoUsuarios = ref(false)
 const errorUsuarios = ref('')
 
+// Consultar los usuarios registrados en el backend.
 async function cargarUsuarios(): Promise<void> {
   cargandoUsuarios.value = true
   errorUsuarios.value = ''
 
   try {
+    // El backend devuelve los usuarios sin sus contraseñas.
     usuarios.value = await apiGet<Usuario[]>('/api/Usuarios')
+
   } catch (error) {
     console.error('Error al cargar usuarios:', error)
 
     errorUsuarios.value =
       'No fue posible consultar los usuarios del sistema.'
+
   } finally {
     cargandoUsuarios.value = false
   }
 }
 
+// Cargar los usuarios al abrir la pantalla.
 onMounted(async () => {
   await cargarUsuarios()
 })
 
+// ============================================
+// ESTADOS DE LA VISTA
+// ============================================
+
 const busqueda = ref('')
 const mostrarModal = ref(false)
 const usuarioSeleccionado = ref<Usuario | null>(null)
+
+  // ============================================
+// MODALES DE ACTIVACIÓN Y DESACTIVACIÓN
+// ============================================
 
 const mostrarModalConfirmacion = ref(false)
 const mostrarModalAviso = ref(false)
@@ -67,6 +98,11 @@ const usuarioParaCambiarEstado = ref<Usuario | null>(null)
 const mensajeAviso = ref('')
 const procesandoEstado = ref(false)
 
+// ============================================
+// PROPIEDADES CALCULADAS
+// ============================================
+
+// Usuarios que coinciden con la búsqueda.
 const usuariosFiltrados = computed(() => {
   const texto = busqueda.value.trim().toLowerCase()
 
@@ -83,13 +119,22 @@ const usuariosFiltrados = computed(() => {
   })
 })
 
+// ============================================
+// PAGINACIÓN DE USUARIOS
+// ============================================
+
+// Cantidad de usuarios por página.
 const registrosPorPagina = 5
+
+// Página seleccionada.
 const paginaActual = ref(1)
 
+// Total de páginas según los resultados del buscador.
 const totalPaginas = computed(() =>
   Math.max(1, Math.ceil(usuariosFiltrados.value.length / registrosPorPagina))
 )
 
+// Usuarios que se mostrarán en la tabla.
 const usuariosPaginados = computed(() => {
   const inicio = (paginaActual.value - 1) * registrosPorPagina
 
@@ -99,32 +144,43 @@ const usuariosPaginados = computed(() => {
   )
 })
 
+// Cambiar de página.
 function cambiarPagina(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginas.value) {
     paginaActual.value = pagina
   }
 }
 
+// Volver a la primera página cuando cambie la búsqueda.
 watch(busqueda, () => {
   paginaActual.value = 1
 })
 
+// Evitar permanecer en una página que ya no existe.
 watch(totalPaginas, (total) => {
   if (paginaActual.value > total) {
     paginaActual.value = total
   }
 })
 
+// Cantidad total de usuarios.
 const totalUsuarios = computed(() => usuarios.value.length)
 
+// Cantidad de usuarios activos.
 const usuariosActivos = computed(() =>
   usuarios.value.filter(usuario => usuario.activo).length
 )
 
+// Cantidad de usuarios inactivos.
 const usuariosInactivos = computed(() =>
   usuarios.value.filter(usuario => !usuario.activo).length
 )
 
+// ============================================
+// FUNCIONES AUXILIARES
+// ============================================
+
+// Obtiene el nombre del rol a partir de su ID.
 function obtenerNombreRol(rolId: number): string {
   return (
     roles.value.find(rol => rol.rolId === rolId)?.nombre ??
@@ -132,70 +188,95 @@ function obtenerNombreRol(rolId: number): string {
   )
 }
 
+// ============================================
+// MODAL DE USUARIOS
+// ============================================
+
+// Abre el formulario para registrar un usuario.
 function nuevoUsuario() {
   usuarioSeleccionado.value = null
   mostrarModal.value = true
 }
 
+// Abre el formulario con los datos del usuario.
 function editarUsuario(usuario: Usuario) {
   usuarioSeleccionado.value = { ...usuario }
   mostrarModal.value = true
 }
 
+// Cierra el formulario.
 function cerrarModal() {
   mostrarModal.value = false
   usuarioSeleccionado.value = null
 }
 
+// ============================================
+// GUARDAR USUARIO
+// ============================================
+
+// ============================================
+// GUARDAR USUARIO EN SQL SERVER
+// ============================================
+
 async function guardarUsuario(datos: DatosUsuario): Promise<void> {
-  if (datos.usuarioId !== undefined) {
-    try {
-      const usuarioActualizado = {
-        nombre: datos.nombre.trim(),
-        correo: datos.correo.trim().toLowerCase(),
-        rolId: datos.rolId
-      }
 
-      await apiPut<void>(
-        `/api/Usuarios/${datos.usuarioId}`,
-        usuarioActualizado
-      )
-
-      if (datos.password) {
-        await apiPatch(
-          `/api/Usuarios/${datos.usuarioId}/cambiar-password?notificarCorreo=${datos.enviarCorreo === true}`,
-          {
-            nuevaPassword: datos.password
-          }
-        )
-      }
-
-      await cargarUsuarios()
-      cerrarModal()
-
-    } catch (error) {
-      console.error('Error al editar usuario:', error)
-
-      const mensaje = error instanceof Error
-        ? error.message
-        : 'No fue posible actualizar el usuario.'
-
-      if (mensaje.includes('409')) {
-        alert('Ya existe otro usuario registrado con ese correo electrónico.')
-      } else {
-        alert(mensaje)
-      }
+  // EDITAR USUARIO EN SQL SERVER
+if (datos.usuarioId !== undefined) {
+  try {
+    // Preparar únicamente los campos permitidos.
+    const usuarioActualizado = {
+      nombre: datos.nombre.trim(),
+      correo: datos.correo.trim().toLowerCase(),
+      rolId: datos.rolId
     }
 
-    return
+    // Actualizar el usuario en el backend.
+    await apiPut<void>(
+      `/api/Usuarios/${datos.usuarioId}`,
+      usuarioActualizado
+    )
+
+    // Cambiar la contraseña solamente si el administrador ingresó una nueva.
+    if (datos.password) {
+      await apiPatch(
+        `/api/Usuarios/${datos.usuarioId}/cambiar-password?notificarCorreo=${datos.enviarCorreo === true}`,
+        {
+          nuevaPassword: datos.password
+        }
+      )
+    }
+
+    // Consultar nuevamente los usuarios reales.
+    await cargarUsuarios()
+
+    // Cerrar el formulario después de actualizar.
+    cerrarModal()
+
+  } catch (error) {
+    console.error('Error al editar usuario:', error)
+
+    const mensaje = error instanceof Error
+      ? error.message
+      : 'No fue posible actualizar el usuario.'
+
+    if (mensaje.includes('409')) {
+      alert('Ya existe otro usuario registrado con ese correo electrónico.')
+    } else {
+      alert(mensaje)
+    }
   }
 
+  return
+}
+
   try {
+    // Validar que el formulario incluya una contraseña.
     if (!datos.password?.trim()) {
       alert('Debe ingresar una contraseña.')
       return
     }
 
+    // Preparar los datos que recibe CrearUsuarioDto.
     const nuevoUsuario = {
       nombre: datos.nombre.trim(),
       correo: datos.correo.trim().toLowerCase(),
@@ -203,12 +284,17 @@ async function guardarUsuario(datos: DatosUsuario): Promise<void> {
       rolId: datos.rolId
     }
 
+   // Registrar el usuario mediante el backend.
+    // Envía las credenciales por correo solo si se seleccionó la opción.
     await apiPost<Usuario>(
       `/api/Usuarios?notificarCorreo=${datos.enviarCorreo === true}`,
       nuevoUsuario
     )
 
+    // Actualizar la tabla con los usuarios reales.
     await cargarUsuarios()
+
+    // Cerrar el formulario después de guardar.
     cerrarModal()
 
   } catch (error) {
@@ -226,7 +312,13 @@ async function guardarUsuario(datos: DatosUsuario): Promise<void> {
   }
 }
 
+// ============================================
+// ABRIR MODAL DE CONFIRMACIÓN
+// ============================================
+
 function cambiarEstado(usuario: Usuario): void {
+
+  // Identificar al usuario que inició sesión.
   const sesion = sessionStorage.getItem('sicop_usuario')
 
   let usuarioActualId: number | null = null
@@ -244,6 +336,7 @@ function cambiarEstado(usuario: Usuario): void {
     }
   }
 
+  // Impedir que un administrador se desactive a sí mismo.
   if (usuario.activo && usuario.usuarioId === usuarioActualId) {
     mensajeAviso.value =
       'No puedes desactivar tu propia cuenta. Por seguridad, esta acción debe realizarla otro Administrador General.'
@@ -252,9 +345,14 @@ function cambiarEstado(usuario: Usuario): void {
     return
   }
 
+  // Preparar el usuario que se desea activar o desactivar.
   usuarioParaCambiarEstado.value = { ...usuario }
   mostrarModalConfirmacion.value = true
 }
+
+// ============================================
+// CERRAR MODALES
+// ============================================
 
 function cerrarModalConfirmacion(): void {
   if (procesandoEstado.value) return
@@ -268,7 +366,12 @@ function cerrarModalAviso(): void {
   mensajeAviso.value = ''
 }
 
+// ============================================
+// CONFIRMAR CAMBIO DE ESTADO EN SQL SERVER
+// ============================================
+
 async function confirmarCambioEstado(): Promise<void> {
+
   const usuario = usuarioParaCambiarEstado.value
 
   if (!usuario || procesandoEstado.value) return
@@ -276,11 +379,15 @@ async function confirmarCambioEstado(): Promise<void> {
   procesandoEstado.value = true
 
   try {
+    // Seleccionar el endpoint correspondiente.
     const endpoint = usuario.activo
       ? `/api/Usuarios/${usuario.usuarioId}/desactivar`
       : `/api/Usuarios/${usuario.usuarioId}/activar`
 
+    // Actualizar el estado en SQL Server.
     await apiPatch(endpoint)
+
+    // Actualizar la tabla.
     await cargarUsuarios()
 
     mostrarModalConfirmacion.value = false
@@ -301,10 +408,15 @@ async function confirmarCambioEstado(): Promise<void> {
     procesandoEstado.value = false
   }
 }
+
+
 </script>
+
+
 
 <template>
   <div class="usuarios-page">
+    <!-- ENCABEZADO -->
     <div class="page-header">
       <div>
         <span class="section-label">SEGURIDAD Y ACCESOS</span>
@@ -320,6 +432,7 @@ async function confirmarCambioEstado(): Promise<void> {
       </button>
     </div>
 
+    <!-- TARJETAS DE RESUMEN -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon purple">👥</div>
@@ -346,6 +459,7 @@ async function confirmarCambioEstado(): Promise<void> {
       </div>
     </div>
 
+    <!-- TABLA DE USUARIOS -->
     <section class="content-card">
       <div class="card-header">
         <div>
@@ -378,10 +492,10 @@ async function confirmarCambioEstado(): Promise<void> {
           </thead>
 
           <tbody>
-            <tr
-              v-for="usuario in usuariosPaginados"
-              :key="usuario.usuarioId"
-            >
+              <tr
+                v-for="usuario in usuariosPaginados"
+                :key="usuario.usuarioId"
+              >
               <td class="id-cell">
                 #{{ usuario.usuarioId }}
               </td>
@@ -450,26 +564,27 @@ async function confirmarCambioEstado(): Promise<void> {
                 No se encontraron usuarios con esa búsqueda.
               </td>
             </tr>
-
             <tr v-if="cargandoUsuarios">
-              <td colspan="6" class="empty-state">
-                Cargando usuarios desde el servidor...
-              </td>
-            </tr>
+            <td colspan="6" class="empty-state">
+              Cargando usuarios desde el servidor...
+            </td>
+          </tr>
 
-            <tr v-else-if="errorUsuarios">
-              <td colspan="6" class="empty-state">
-                {{ errorUsuarios }}
-              </td>
-            </tr>
+          <tr v-else-if="errorUsuarios">
+            <td colspan="6" class="empty-state">
+              {{ errorUsuarios }}
+            </td>
+          </tr>
           </tbody>
         </table>
       </div>
 
-      <div
-        v-if="!cargandoUsuarios && !errorUsuarios && usuariosFiltrados.length > 0"
-        class="table-footer pagination-footer"
-      >
+            <!-- PAGINACIÓN DE USUARIOS -->
+              <div
+          v-if="!cargandoUsuarios && !errorUsuarios && usuariosFiltrados.length > 0"
+          class="table-footer pagination-footer"
+>
+
         <span>
           Mostrando
           {{ usuariosFiltrados.length === 0 ? 0 : (paginaActual - 1) * registrosPorPagina + 1 }}
@@ -501,9 +616,11 @@ async function confirmarCambioEstado(): Promise<void> {
             Siguiente ›
           </button>
         </div>
+
       </div>
     </section>
 
+    <!-- FORMULARIO PARA REGISTRAR Y EDITAR -->
     <UsuarioModal
       :visible="mostrarModal"
       :usuario="usuarioSeleccionado"
@@ -512,93 +629,99 @@ async function confirmarCambioEstado(): Promise<void> {
       @guardar="guardarUsuario"
     />
 
-    <div
-      v-if="mostrarModalConfirmacion && usuarioParaCambiarEstado"
-      class="usuario-dialog-overlay"
-      @click.self="cerrarModalConfirmacion"
-    >
-      <section
-        class="usuario-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="titulo-confirmacion-usuario"
-      >
-        <div class="usuario-dialog-icon">?</div>
+    <!-- ============================================
+     MODAL 1: CONFIRMAR ACTIVACIÓN/DESACTIVACIÓN
+============================================ -->
+<div
+  v-if="mostrarModalConfirmacion && usuarioParaCambiarEstado"
+  class="usuario-dialog-overlay"
+  @click.self="cerrarModalConfirmacion"
+>
+  <section
+    class="usuario-dialog"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="titulo-confirmacion-usuario"
+  >
+    <div class="usuario-dialog-icon">?</div>
 
-        <h2 id="titulo-confirmacion-usuario">
-          {{ usuarioParaCambiarEstado.activo
+    <h2 id="titulo-confirmacion-usuario">
+      {{ usuarioParaCambiarEstado.activo
+        ? 'Desactivar usuario'
+        : 'Activar usuario' }}
+    </h2>
+
+    <p>
+      ¿Estás seguro de que deseas
+      {{ usuarioParaCambiarEstado.activo ? 'desactivar' : 'activar' }}
+      a <strong>{{ usuarioParaCambiarEstado.nombre }}</strong>?
+    </p>
+
+    <p class="usuario-dialog-detail">
+      {{ usuarioParaCambiarEstado.activo
+        ? 'El usuario no podrá iniciar sesión hasta que vuelva a ser activado.'
+        : 'El usuario podrá iniciar sesión nuevamente con sus credenciales.' }}
+    </p>
+
+    <div class="usuario-dialog-actions">
+      <button
+        type="button"
+        class="usuario-dialog-cancel"
+        :disabled="procesandoEstado"
+        @click="cerrarModalConfirmacion"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="usuario-dialog-primary"
+        :disabled="procesandoEstado"
+        @click="confirmarCambioEstado"
+      >
+        {{ procesandoEstado
+          ? 'Procesando...'
+          : usuarioParaCambiarEstado.activo
             ? 'Desactivar usuario'
             : 'Activar usuario' }}
-        </h2>
-
-        <p>
-          ¿Estás seguro de que deseas
-          {{ usuarioParaCambiarEstado.activo ? 'desactivar' : 'activar' }}
-          a <strong>{{ usuarioParaCambiarEstado.nombre }}</strong>?
-        </p>
-
-        <p class="usuario-dialog-detail">
-          {{ usuarioParaCambiarEstado.activo
-            ? 'El usuario no podrá iniciar sesión hasta que vuelva a ser activado.'
-            : 'El usuario podrá iniciar sesión nuevamente con sus credenciales.' }}
-        </p>
-
-        <div class="usuario-dialog-actions">
-          <button
-            type="button"
-            class="usuario-dialog-cancel"
-            :disabled="procesandoEstado"
-            @click="cerrarModalConfirmacion"
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="button"
-            class="usuario-dialog-primary"
-            :disabled="procesandoEstado"
-            @click="confirmarCambioEstado"
-          >
-            {{ procesandoEstado
-              ? 'Procesando...'
-              : usuarioParaCambiarEstado.activo
-                ? 'Desactivar usuario'
-                : 'Activar usuario' }}
-          </button>
-        </div>
-      </section>
+      </button>
     </div>
+  </section>
+</div>
 
-    <div
-      v-if="mostrarModalAviso"
-      class="usuario-dialog-overlay"
-      @click.self="cerrarModalAviso"
-    >
-      <section
-        class="usuario-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="titulo-aviso-usuario"
+<!-- ============================================
+     MODAL 2: ACCIÓN NO PERMITIDA / AVISO
+============================================ -->
+<div
+  v-if="mostrarModalAviso"
+  class="usuario-dialog-overlay"
+  @click.self="cerrarModalAviso"
+>
+  <section
+    class="usuario-dialog"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="titulo-aviso-usuario"
+  >
+    <div class="usuario-dialog-icon">!</div>
+
+    <h2 id="titulo-aviso-usuario">
+      Acción no permitida
+    </h2>
+
+    <p>{{ mensajeAviso }}</p>
+
+    <div class="usuario-dialog-actions">
+      <button
+        type="button"
+        class="usuario-dialog-primary"
+        @click="cerrarModalAviso"
       >
-        <div class="usuario-dialog-icon">!</div>
-
-        <h2 id="titulo-aviso-usuario">
-          Acción no permitida
-        </h2>
-
-        <p>{{ mensajeAviso }}</p>
-
-        <div class="usuario-dialog-actions">
-          <button
-            type="button"
-            class="usuario-dialog-primary"
-            @click="cerrarModalAviso"
-          >
-            Entendido
-          </button>
-        </div>
-      </section>
+        Entendido
+      </button>
     </div>
+  </section>
+</div>
   </div>
 </template>
 
@@ -874,6 +997,7 @@ td {
   background: currentColor;
 }
 
+/* Centrar los botones de la columna Acciones */
 .actions {
   display: flex;
   justify-content: center;
@@ -881,6 +1005,7 @@ td {
   gap: 8px;
 }
 
+/* Centrar el encabezado y las celdas de Acciones */
 table th:last-child,
 table td:last-child {
   text-align: center;
@@ -954,6 +1079,10 @@ table td:last-child {
     justify-content: center;
   }
 }
+
+/* ============================================
+   MODALES PERSONALIZADOS DE USUARIOS
+============================================ */
 
 .usuario-dialog-overlay {
   position: fixed;
@@ -1057,6 +1186,9 @@ table td:last-child {
     flex-direction: column;
   }
 }
+/* ============================================
+   PAGINACIÓN DE USUARIOS
+   ============================================ */
 
 .pagination-footer {
   display: flex;

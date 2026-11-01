@@ -1,17 +1,21 @@
-
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { apiPost, apiPut } from '@/services/api'
 import FacturaModal from '../../components/FacturaModal.vue'
 
+// Obtener el rol del usuario autenticado.
 const usuarioGuardado = sessionStorage.getItem('sicop_usuario')
 
 const rolUsuario = usuarioGuardado
   ? JSON.parse(usuarioGuardado).rolId
   : null
 
+// Solo el Administrador General puede anular facturas.
+// En SICOP, el Administrador General tiene rolId = 1.
 const esAdministradorGeneral = Number(rolUsuario) === 1
 
+// Datos compartidos con el futuro módulo Pagos.
+// Este almacenamiento es temporal; aún no utiliza el backend.
 import {
   facturas,
   proveedores,
@@ -27,8 +31,9 @@ import {
   type FacturaFormulario
 } from '../../stores/sicopStore'
 
-const busqueda = ref('')
 
+// Buscar por número de factura o nombre del proveedor.
+const busqueda = ref('')
 const facturasFiltradas = computed(() => {
   const texto = busqueda.value.trim().toLowerCase()
   return facturas.value.filter(factura =>
@@ -37,13 +42,22 @@ const facturasFiltradas = computed(() => {
   )
 })
 
+// =============================================
+// PAGINACIÓN DE FACTURAS DE COMPRA
+// =============================================
+
+// Cantidad de facturas por página.
 const registrosPorPagina = 5
+
+// Página actual.
 const paginaActual = ref(1)
 
+// Calcular el total de páginas.
 const totalPaginas = computed(() =>
   Math.max(1, Math.ceil(facturasFiltradas.value.length / registrosPorPagina))
 )
 
+// Obtener únicamente las facturas de la página actual.
 const facturasPaginadas = computed(() => {
   const inicio = (paginaActual.value - 1) * registrosPorPagina
 
@@ -53,33 +67,44 @@ const facturasPaginadas = computed(() => {
   )
 })
 
+// Cambiar de página.
 function cambiarPagina(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginas.value) {
     paginaActual.value = pagina
   }
 }
 
+// Regresar a la primera página al buscar.
 watch(busqueda, () => {
   paginaActual.value = 1
 })
 
+// Evitar páginas vacías cuando disminuyen los registros.
 watch(totalPaginas, (total) => {
   if (paginaActual.value > total) {
     paginaActual.value = total
   }
 })
 
+// Factura seleccionada para anulación.
 const facturaParaAnular = ref<FacturaCompra | null>(null)
 
+// Abrir la confirmación de anulación.
 function confirmarAnulacion(factura: FacturaCompra): void {
   if (!esAdministradorGeneral || factura.anulada) return
 
   facturaParaAnular.value = factura
 }
 
+// AQUÍ COMIENZA EL NUEVO CÓDIGO.
+
+// Motivo obligatorio para anular una factura.
 const motivoAnulacion = ref('')
+
+// Indica si se está procesando la anulación.
 const anulandoFactura = ref(false)
 
+// Cerrar la confirmación.
 function cancelarAnulacion(): void {
   if (anulandoFactura.value) return
 
@@ -87,6 +112,7 @@ function cancelarAnulacion(): void {
   motivoAnulacion.value = ''
 }
 
+// Confirmar la anulación en SQL Server.
 async function anularFactura(): Promise<void> {
   const factura = facturaParaAnular.value
   const motivo = motivoAnulacion.value.trim()
@@ -101,13 +127,16 @@ async function anularFactura(): Promise<void> {
   anulandoFactura.value = true
 
   try {
+    // Enviar el motivo al backend.
     await apiPut<void>(
       `/api/FacturasCompras/${factura.facturaCompraId}/anular`,
       motivo
     )
 
+    // Actualizar las facturas desde SQL Server.
     await cargarFacturas()
 
+    // Cerrar la confirmación.
     facturaParaAnular.value = null
     motivoAnulacion.value = ''
 
@@ -124,26 +153,44 @@ async function anularFactura(): Promise<void> {
   }
 }
 
+// =============================================
+// CARGAR DATOS REALES DESDE SQL SERVER
+// =============================================
+
 onMounted(async () => {
   try {
+    // Primero cargar los proveedores reales.
     await cargarProveedoresFacturas()
+
+    // Después cargar las facturas y sus saldos.
     await cargarFacturas()
+
   } catch (error) {
     console.error('Error al cargar las facturas:', error)
     alert('No fue posible consultar las facturas desde el servidor.')
   }
 })
 
+// Solo proveedores activos para registrar facturas nuevas.
 const proveedoresActivos = computed(() =>
   proveedores.value.filter(proveedor => proveedor.activo)
 )
 
+// Control del formulario de nueva factura.
 const mostrarModal = ref(false)
 const facturaSeleccionada = ref<FacturaFormulario | null>(null)
 
+// ==============================================
+// MODAL DE ERROR AL REGISTRAR FACTURA
+// ==============================================
+
+// Controla la visibilidad del mensaje de error.
 const mostrarModalError = ref(false)
+
+// Mensaje que se mostrará al usuario.
 const mensajeErrorFactura = ref('')
 
+// Cerrar únicamente el mensaje de error.
 function cerrarModalError() {
   mostrarModalError.value = false
   mensajeErrorFactura.value = ''
@@ -172,49 +219,64 @@ function cerrarModal() {
   facturaSeleccionada.value = null
 }
 
-async function guardarFactura(datos: FacturaFormulario): Promise<void> {
-  try {
-    if (datos.facturaCompraId !== undefined) {
-      alert('Las facturas registradas no pueden editarse.')
-      return
-    }
 
-    const nuevaFactura = {
-      proveedorId: datos.proveedorId,
-      numeroFactura: datos.numeroFactura.trim(),
-      fechaEmision: datos.fechaEmision,
-      fechaVencimiento: datos.fechaVencimiento,
-      total: datos.total,
-      observaciones: datos.observaciones
-    }
+ // Registrar una factura real en SQL Server.
+ async function guardarFactura(datos: FacturaFormulario): Promise<void> {
+   try {
 
-    await apiPost<FacturaCompra>(
-      '/api/FacturasCompras',
-      nuevaFactura
-    )
+     // El backend no permite editar facturas registradas.
+     if (datos.facturaCompraId !== undefined) {
+       alert('Las facturas registradas no pueden editarse.')
+       return
+     }
 
-    await cargarFacturas()
-    cerrarModal()
+     // Preparar los datos que recibe CrearFacturaCompraDto.
+     const nuevaFactura = {
+       proveedorId: datos.proveedorId,
+       numeroFactura: datos.numeroFactura.trim(),
+       fechaEmision: datos.fechaEmision,
+       fechaVencimiento: datos.fechaVencimiento,
+       total: datos.total,
+       observaciones: datos.observaciones
+     }
 
-  } catch (error) {
-    console.error('Error al registrar la factura:', error)
+     // Guardar la factura mediante POST.
+     await apiPost<FacturaCompra>(
+       '/api/FacturasCompras',
+       nuevaFactura
+     )
 
-    const mensaje = error instanceof Error
-      ? error.message
-      : 'No fue posible registrar la factura.'
+     // Actualizar la tabla y los indicadores desde SQL Server.
+     await cargarFacturas()
 
-    if (mensaje.includes('409')) {
-      mensajeErrorFactura.value =
-        'Ya existe una factura registrada con este número en SICOP. No se permiten números de factura duplicados.'
-    } else {
-      mensajeErrorFactura.value = mensaje
-    }
+     // Cerrar el formulario solamente si todo salió bien.
+     cerrarModal()
 
-    mostrarModalError.value = true
+   }  catch (error) {
+  console.error('Error al registrar la factura:', error)
+
+  const mensaje = error instanceof Error
+    ? error.message
+    : 'No fue posible registrar la factura.'
+
+  // Mostrar un mensaje cuando el número de factura ya existe en SICOP.
+  if (mensaje.includes('409')) {
+    mensajeErrorFactura.value =
+      'Ya existe una factura registrada con este número en SICOP. No se permiten números de factura duplicados.'
+  } else {
+    // Conservar el mensaje original para otros errores.
+    mensajeErrorFactura.value = mensaje
   }
-}
 
+  mostrarModalError.value = true
+}
+ }
+ 
+
+// Mostrar el estado real de la factura.
 function obtenerEstado(factura: FacturaCompra): string {
+
+  // La anulación tiene prioridad sobre el saldo.
   if (factura.anulada) return 'Anulada'
 
   if (factura.saldoPendiente <= 0) return 'Pagada'
@@ -226,7 +288,9 @@ function obtenerEstado(factura: FacturaCompra): string {
   return 'Pendiente'
 }
 
+// Asignar el estilo correspondiente al estado.
 function claseEstado(factura: FacturaCompra): string {
+
   if (factura.anulada) return 'cancelled'
 
   if (factura.saldoPendiente <= 0) return 'paid'
@@ -237,10 +301,12 @@ function claseEstado(factura: FacturaCompra): string {
 
   return 'pending'
 }
+
 </script>
 
 <template>
   <main class="facturas-page">
+    <!-- Encabezado -->
     <header class="page-header">
       <div>
         <span class="page-label">CUENTAS POR PAGAR</span>
@@ -252,6 +318,7 @@ function claseEstado(factura: FacturaCompra): string {
       </button>
     </header>
 
+    <!-- Indicadores -->
     <section class="summary-grid">
       <article class="summary-card">
         <span class="summary-label">Facturas registradas</span>
@@ -275,6 +342,7 @@ function claseEstado(factura: FacturaCompra): string {
       </article>
     </section>
 
+    <!-- Tabla -->
     <section class="table-card">
       <div class="table-header">
         <div>
@@ -305,10 +373,9 @@ function claseEstado(factura: FacturaCompra): string {
             </tr>
           </thead>
           <tbody>
+            <!-- Mostrar un correlativo visual según el orden de las facturas -->
             <tr
-              v-for="(factura, index) in facturasPaginadas"
-              :key="factura.facturaCompraId"
-            >
+              v-for="(factura, index) in facturasPaginadas":key="factura.facturaCompraId">
               <td>{{ (paginaActual - 1) * registrosPorPagina + index + 1 }}</td>
               <td class="invoice-number">{{ factura.numeroFactura }}</td>
               <td class="provider-name">{{ factura.nombreProveedor }}</td>
@@ -317,24 +384,29 @@ function claseEstado(factura: FacturaCompra): string {
               <td class="money-cell">{{ formatoMoneda(factura.total) }}</td>
               <td class="money-cell">{{ formatoMoneda(factura.saldoPendiente) }}</td>
               <td><span class="status-badge" :class="claseEstado(factura)">{{ obtenerEstado(factura) }}</span></td>
-              <td class="acciones-factura">
-                <button
-                  v-if="esAdministradorGeneral && !factura.anulada"
-                  type="button"
-                  class="btn-edit"
-                  @click="confirmarAnulacion(factura)"
-                >
-                  ✕ Anular
-                </button>
+              <!-- Columna de acciones centrada -->
+<td class="acciones-factura">
 
-                <span
-                  v-else-if="factura.anulada"
-                  class="factura-anulada-badge"
-                >
-                  <span aria-hidden="true">⊗</span>
-                  Anulada
-                </span>
-              </td>
+              <!-- Botón para anular facturas activas -->
+              <button
+                v-if="esAdministradorGeneral && !factura.anulada"
+                type="button"
+                class="btn-edit"
+                @click="confirmarAnulacion(factura)"
+              >
+                ✕ Anular
+              </button>
+
+              <!-- Etiqueta para facturas anuladas -->
+              <span
+                v-else-if="factura.anulada"
+                class="factura-anulada-badge"
+              >
+                <span aria-hidden="true">⊗</span>
+                Anulada
+              </span>
+
+            </td>
             </tr>
             <tr v-if="facturasFiltradas.length === 0">
               <td colspan="9" class="empty-state">
@@ -347,44 +419,53 @@ function claseEstado(factura: FacturaCompra): string {
         </table>
       </div>
 
-      <div
-        v-if="facturasFiltradas.length > 0"
-        class="pagination-container"
-      >
-        <span class="pagination-info">
-          Mostrando
-          {{ (paginaActual - 1) * registrosPorPagina + 1 }}
-          -
-          {{ Math.min(paginaActual * registrosPorPagina, facturasFiltradas.length) }}
-          de {{ facturasFiltradas.length }} facturas
-        </span>
+      <!-- ====================================== -->
+<!-- PAGINACIÓN DE FACTURAS DE COMPRA       -->
+<!-- ====================================== -->
 
-        <div class="pagination-buttons">
-          <button
-            type="button"
-            class="pagination-btn"
-            :disabled="paginaActual === 1"
-            @click="cambiarPagina(paginaActual - 1)"
-          >
-            ‹ Anterior
-          </button>
+<div
+  v-if="facturasFiltradas.length > 0"
+  class="pagination-container"
+>
+  <!-- Cantidad de registros mostrados -->
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, facturasFiltradas.length) }}
+    de {{ facturasFiltradas.length }} facturas
+  </span>
 
-          <span class="pagination-current">
-            Página {{ paginaActual }} de {{ totalPaginas }}
-          </span>
+  <!-- Controles de navegación -->
+  <div class="pagination-buttons">
 
-          <button
-            type="button"
-            class="pagination-btn"
-            :disabled="paginaActual === totalPaginas"
-            @click="cambiarPagina(paginaActual + 1)"
-          >
-            Siguiente ›
-          </button>
-        </div>
-      </div>
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
+
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+
+  </div>
+</div>
     </section>
 
+    <!-- Formulario de registro y edición -->
     <FacturaModal
       :visible="mostrarModal"
       :factura="facturaSeleccionada"
@@ -393,102 +474,103 @@ function claseEstado(factura: FacturaCompra): string {
       @guardar="guardarFactura"
     />
 
-    <div
-      v-if="mostrarModalError"
-      class="error-factura-overlay"
-      @click.self="cerrarModalError"
-    >
-      <section
-        class="error-factura-modal"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="titulo-error-factura"
-        aria-describedby="descripcion-error-factura"
+    <!-- MODAL PERSONALIZADO DE ERROR AL REGISTRAR FACTURA -->
+<div
+  v-if="mostrarModalError"
+  class="error-factura-overlay"
+  @click.self="cerrarModalError"
+>
+  <section
+    class="error-factura-modal"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="titulo-error-factura"
+    aria-describedby="descripcion-error-factura"
+  >
+    <div class="error-factura-icon">!</div>
+
+    <h2 id="titulo-error-factura">
+      No se pudo registrar la factura
+    </h2>
+
+    <p id="descripcion-error-factura">
+      {{ mensajeErrorFactura }}
+    </p>
+
+    <div class="error-factura-actions">
+      <button
+        type="button"
+        class="error-factura-button"
+        @click="cerrarModalError"
       >
-        <div class="error-factura-icon">!</div>
-
-        <h2 id="titulo-error-factura">
-          No se pudo registrar la factura
-        </h2>
-
-        <p id="descripcion-error-factura">
-          {{ mensajeErrorFactura }}
-        </p>
-
-        <div class="error-factura-actions">
-          <button
-            type="button"
-            class="error-factura-button"
-            @click="cerrarModalError"
-          >
-            Entendido
-          </button>
-        </div>
-      </section>
+        Entendido
+      </button>
     </div>
+  </section>
+</div>
+    <!-- Confirmación de anulación de factura -->
+<div
+  v-if="facturaParaAnular"
+  class="anulacion-overlay"
+>
+  <div class="anulacion-modal">
+    <h2>Anular factura</h2>
 
-    <div
-      v-if="facturaParaAnular"
-      class="anulacion-overlay"
-    >
-      <div class="anulacion-modal">
-        <h2>Anular factura</h2>
+    <p>
+      ¿Deseas anular la factura
+      <strong>{{ facturaParaAnular.numeroFactura }}</strong>?
+    </p>
 
-        <p>
-          ¿Deseas anular la factura
-          <strong>{{ facturaParaAnular.numeroFactura }}</strong>?
-        </p>
+    <p>
+      Esta operación conservará el registro en el historial.
+      No se permite anular facturas con pagos vigentes.
+    </p>
 
-        <p>
-          Esta operación conservará el registro en el historial.
-          No se permite anular facturas con pagos vigentes.
-        </p>
+    <label for="motivo-anulacion">
+      Motivo de anulación
+    </label>
 
-        <label for="motivo-anulacion">
-          Motivo de anulación
-        </label>
+    <textarea
+      id="motivo-anulacion"
+      v-model="motivoAnulacion"
+      maxlength="500"
+      rows="4"
+      placeholder="Escribe el motivo de la anulación..."
+      :disabled="anulandoFactura"
+    ></textarea>
 
-        <textarea
-          id="motivo-anulacion"
-          v-model="motivoAnulacion"
-          maxlength="500"
-          rows="4"
-          placeholder="Escribe el motivo de la anulación..."
-          :disabled="anulandoFactura"
-        ></textarea>
+    <div class="anulacion-acciones">
+      <button
+        type="button"
+        class="btn-cancelar-anulacion"
+        :disabled="anulandoFactura"
+        @click="cancelarAnulacion"
+      >
+        Cancelar
+      </button>
 
-        <div class="anulacion-acciones">
-          <button
-            type="button"
-            class="btn-cancelar-anulacion"
-            :disabled="anulandoFactura"
-            @click="cancelarAnulacion"
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="button"
-            class="btn-confirmar-anulacion"
-            :disabled="anulandoFactura || !motivoAnulacion.trim()"
-            @click="anularFactura"
-          >
-            {{ anulandoFactura ? 'Anulando...' : 'Confirmar anulación' }}
-          </button>
-        </div>
-      </div>
+      <button
+        type="button"
+        class="btn-confirmar-anulacion"
+        :disabled="anulandoFactura || !motivoAnulacion.trim()"
+        @click="anularFactura"
+      >
+        {{ anulandoFactura ? 'Anulando...' : 'Confirmar anulación' }}
+      </button>
     </div>
+  </div>
+</div>
   </main>
 </template>
 
 <style scoped>
+/* Contenedor principal */
 .facturas-page {
   min-height: 100%;
   padding: 42px;
   background: #f8f5fc;
   font-family: Arial, sans-serif;
 }
-
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -496,11 +578,11 @@ function claseEstado(factura: FacturaCompra): string {
   gap: 24px;
   margin-bottom: 32px;
 }
-
 .page-label { color: #9069b6; font-size: 12px; font-weight: 700; letter-spacing: 2px; }
 .page-header h1 { margin: 12px 0; color: #352057; font-size: 34px; }
 .page-header p { color: #917ca9; font-size: 15px; }
 
+/* Botón de registro */
 .btn-primary {
   display: flex;
   align-items: center;
@@ -515,16 +597,15 @@ function claseEstado(factura: FacturaCompra): string {
   white-space: nowrap;
   cursor: pointer;
 }
-
 .btn-primary:hover { background: #633e96; }
 
+/* Tarjetas de resumen */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
   margin-bottom: 30px;
 }
-
 .summary-card {
   min-width: 0;
   padding: 25px;
@@ -533,9 +614,7 @@ function claseEstado(factura: FacturaCompra): string {
   border-radius: 18px;
   box-shadow: 0 8px 30px rgba(71, 43, 109, 0.03);
 }
-
 .summary-label { color: #927ca9; font-size: 13px; font-weight: 600; }
-
 .summary-card strong {
   display: block;
   margin: 18px 0 10px;
@@ -543,9 +622,9 @@ function claseEstado(factura: FacturaCompra): string {
   font-size: clamp(19px, 2vw, 26px);
   overflow-wrap: anywhere;
 }
-
 .summary-card p { margin: 0; color: #a18fb4; font-size: 12px; }
 
+/* Contenedor de la tabla */
 .table-card {
   background: #fff;
   border: 1px solid #ebe3f5;
@@ -553,7 +632,6 @@ function claseEstado(factura: FacturaCompra): string {
   padding: 30px;
   box-shadow: 0 8px 30px rgba(71, 43, 109, 0.03);
 }
-
 .table-header {
   display: flex;
   align-items: center;
@@ -561,10 +639,8 @@ function claseEstado(factura: FacturaCompra): string {
   gap: 20px;
   margin-bottom: 25px;
 }
-
 .table-header h2 { margin: 0 0 10px; color: #352057; font-size: 21px; }
 .table-header p { margin: 0; color: #9a87ae; font-size: 14px; }
-
 .total-badge {
   padding: 10px 16px;
   border-radius: 30px;
@@ -575,6 +651,7 @@ function claseEstado(factura: FacturaCompra): string {
   white-space: nowrap;
 }
 
+/* Buscador */
 .search-container {
   display: flex;
   align-items: center;
@@ -586,9 +663,7 @@ function claseEstado(factura: FacturaCompra): string {
   border-radius: 12px;
   background: #fcfaff;
 }
-
 .search-icon { color: #7950ae; font-size: 25px; }
-
 .search-container input {
   flex: 1;
   min-width: 0;
@@ -599,10 +674,10 @@ function claseEstado(factura: FacturaCompra): string {
   font-size: 14px;
 }
 
+/* Tabla con desplazamiento horizontal */
 .table-responsive { width: 100%; overflow-x: auto; }
 table { width: 100%; min-width: 1240px; border-collapse: collapse; text-align: left; }
 thead { background: #f7f2fc; }
-
 th {
   padding: 18px;
   color: #72558f;
@@ -610,18 +685,17 @@ th {
   font-weight: 700;
   white-space: nowrap;
 }
-
 td {
   padding: 19px 18px;
   border-bottom: 1px solid #f0eaf6;
   color: #716080;
   font-size: 13px;
 }
-
 .invoice-number { color: #7950ae; font-weight: 700; white-space: nowrap; }
 .provider-name { color: #352057; font-weight: 700; white-space: nowrap; }
 .money-cell { white-space: nowrap; font-weight: 600; }
 
+/* Estados */
 .status-badge {
   display: inline-block;
   padding: 8px 13px;
@@ -630,16 +704,17 @@ td {
   font-weight: 600;
   white-space: nowrap;
 }
-
 .pending { background: #fff3df; color: #a66a12; }
 .partial { background: #eee9fb; color: #7550a9; }
 .paid { background: #e9f7ee; color: #27834b; }
 
+/* Estado de factura anulada */
 .cancelled {
   background: #fde8e8;
   color: #b42318;
 }
 
+/* Botón editar */
 .btn-edit {
   border: 1px solid #e5d9f0;
   background: #f3ecfa;
@@ -651,18 +726,18 @@ td {
   cursor: pointer;
   white-space: nowrap;
 }
-
 .btn-edit:hover { background: #e8d9f5; }
 
+/* Sin resultados */
 .empty-state { padding: 70px 20px; text-align: center; }
 .empty-icon { color: #b99bdb; font-size: 45px; }
 .empty-state h3 { color: #493078; font-size: 18px; }
 .empty-state p { color: #a18fb4; font-size: 14px; }
 
+/* Adaptación a pantallas pequeñas */
 @media (max-width: 1100px) {
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
 @media (max-width: 768px) {
   .facturas-page { padding: 20px; }
   .page-header, .table-header { flex-direction: column; align-items: flex-start; }
@@ -670,11 +745,11 @@ td {
   .btn-primary { width: 100%; justify-content: center; }
   .table-card { padding: 18px; }
 }
-
 @media (max-width: 480px) {
   .summary-grid { grid-template-columns: 1fr; }
 }
 
+/* Fondo de la ventana de anulación */
 .anulacion-overlay {
   position: fixed;
   inset: 0;
@@ -686,6 +761,7 @@ td {
   background: rgba(35, 20, 55, 0.55);
 }
 
+/* Ventana de confirmación */
 .anulacion-modal {
   width: 100%;
   max-width: 480px;
@@ -757,6 +833,10 @@ td {
   cursor: not-allowed;
 }
 
+/* ==============================================
+   MODAL PERSONALIZADO DE ERROR DE FACTURA
+   ============================================== */
+
 .error-factura-overlay {
   position: fixed;
   inset: 0;
@@ -825,24 +905,36 @@ td {
   background: #633e96;
 }
 
+/* ============================================
+   COLUMNA ACCIONES - FACTURAS
+============================================ */
+
+/* Centrar encabezado y contenido */
 table th:last-child,
 table td.acciones-factura {
   text-align: center;
 }
 
+/* Etiqueta para facturas anuladas */
 .factura-anulada-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+
   padding: 8px 12px;
   border-radius: 9px;
+
   background: #fce8eb;
   color: #b44960;
+
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
+/* =========================================
+   PAGINACIÓN DE FACTURAS DE COMPRA
+   ========================================= */
 
 .pagination-container {
   display: flex;
