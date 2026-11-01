@@ -2,10 +2,6 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 
-// =============================================
-// ESTRUCTURA DE LOS DATOS DEL PROVEEDOR
-// =============================================
-
 interface ProveedorFormulario {
   proveedorId?: number
   nombre: string
@@ -16,24 +12,15 @@ interface ProveedorFormulario {
   activo: boolean
 }
 
-// =============================================
-// PROPIEDADES RECIBIDAS DESDE LA VISTA
-// =============================================
-
 const props = defineProps<{
   visible: boolean
   proveedor?: ProveedorFormulario | null
 }>()
 
-// Eventos enviados a ProveedoresView.vue.
 const emit = defineEmits<{
   cerrar: []
   guardar: [proveedor: ProveedorFormulario]
 }>()
-
-// =============================================
-// DATOS DEL FORMULARIO
-// =============================================
 
 const formulario = reactive<ProveedorFormulario>({
   nombre: '',
@@ -44,12 +31,6 @@ const formulario = reactive<ProveedorFormulario>({
   activo: true
 })
 
-// =============================================
-// PREPARAR FORMULARIO AL ABRIRLO
-// =============================================
-
-// Si existe un proveedor, cargamos sus datos.
-// Si no existe, limpiamos los campos para registrar.
 watch(
   () => [props.visible, props.proveedor] as const,
   () => {
@@ -66,22 +47,12 @@ watch(
   { immediate: true }
 )
 
-// =============================================
-// GUARDAR PROVEEDOR
-// =============================================
-
-// El formulario envía los datos a la vista principal.
-// Todavía no realizamos peticiones al backend.
 function guardarProveedor() {
   emit('guardar', { ...formulario })
 }
 </script>
 
 <template>
-  <!-- ====================================== -->
-  <!-- FONDO DE LA VENTANA MODAL              -->
-  <!-- ====================================== -->
-
   <div
     v-if="visible"
     class="modal-overlay"
@@ -93,11 +64,6 @@ function guardarProveedor() {
       aria-modal="true"
       aria-labelledby="modal-titulo"
     >
-
-      <!-- ====================================== -->
-      <!-- ENCABEZADO FIJO                       -->
-      <!-- ====================================== -->
-
       <header class="modal-header">
         <div>
           <span class="modal-label">
@@ -117,7 +83,6 @@ function guardarProveedor() {
           </p>
         </div>
 
-        <!-- Cerrar ventana -->
         <button
           class="close-button"
           type="button"
@@ -128,24 +93,13 @@ function guardarProveedor() {
         </button>
       </header>
 
-      <!-- ====================================== -->
-      <!-- FORMULARIO                           -->
-      <!-- ====================================== -->
-
       <form
         id="form-proveedor"
         class="modal-form"
         @submit.prevent="guardarProveedor"
       >
-
-        <!-- ====================================== -->
-        <!-- CONTENIDO CON DESPLAZAMIENTO          -->
-        <!-- ====================================== -->
-
         <div class="modal-body">
           <div class="form-grid">
-
-            <!-- Nombre del proveedor -->
             <div class="form-group full-width">
               <label for="nombre">
                 Nombre del proveedor *
@@ -161,7 +115,6 @@ function guardarProveedor() {
               />
             </div>
 
-            <!-- NIT -->
             <div class="form-group">
               <label for="nit">
                 NIT *
@@ -176,7 +129,6 @@ function guardarProveedor() {
               />
             </div>
 
-            <!-- Teléfono -->
             <div class="form-group">
               <label for="telefono">
                 Teléfono
@@ -190,7 +142,6 @@ function guardarProveedor() {
               />
             </div>
 
-            <!-- Correo electrónico -->
             <div class="form-group full-width">
               <label for="correo">
                 Correo electrónico
@@ -204,7 +155,6 @@ function guardarProveedor() {
               />
             </div>
 
-            <!-- Dirección -->
             <div class="form-group full-width">
               <label for="direccion">
                 Dirección
@@ -218,34 +168,24 @@ function guardarProveedor() {
               ></textarea>
             </div>
 
+            <div class="form-group full-width">
+              <label for="estado">
+                Estado del proveedor
+              </label>
 
-                <!-- Estado del proveedor -->
-                <div class="form-group full-width">
-                  <label for="estado">
-                    Estado del proveedor
-                  </label>
-
-                  <!-- Mostrar el estado real sin permitir modificarlo aquí -->
-                  <select
-                    id="estado"
-                    v-model="formulario.activo"
-                    disabled
-                  >
-                    <option :value="true">Activo</option>
-                    <option :value="false">Inactivo</option>
-                  </select>
-                </div>
-
+              <select
+                id="estado"
+                v-model="formulario.activo"
+                disabled
+              >
+                <option :value="true">Activo</option>
+                <option :value="false">Inactivo</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <!-- ====================================== -->
-        <!-- BOTONES INFERIORES FIJOS              -->
-        <!-- ====================================== -->
-
         <footer class="modal-footer">
-
-          <!-- Cancelar -->
           <button
             type="button"
             class="btn-cancel"
@@ -254,7 +194,6 @@ function guardarProveedor() {
             Cancelar
           </button>
 
-          <!-- Registrar o guardar cambios -->
           <button
             type="submit"
             class="btn-save"
@@ -265,21 +204,13 @@ function guardarProveedor() {
                 : 'Registrar proveedor'
             }}
           </button>
-
         </footer>
-
       </form>
-
     </section>
   </div>
 </template>
 
 <style scoped>
-
-/* ========================================= */
-/* FONDO DE LA VENTANA MODAL                 */
-/* ========================================= */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -294,10 +225,6 @@ function guardarProveedor() {
   background: rgba(35, 20, 59, 0.55);
   backdrop-filter: blur(5px);
 }
-
-/* ========================================= */
-/* VENTANA PRINCIPAL                         */
-/* ========================================= */
 
 .modal-card {
   display: flex;
@@ -318,10 +245,6 @@ function guardarProveedor() {
 
   font-family: Arial, sans-serif;
 }
-
-/* ========================================= */
-/* ENCABEZADO FIJO                           */
-/* ========================================= */
 
 .modal-header {
   display: flex;
@@ -357,7 +280,6 @@ function guardarProveedor() {
   margin: 0;
 }
 
-/* Botón para cerrar */
 .close-button {
   display: flex;
   align-items: center;
@@ -382,10 +304,6 @@ function guardarProveedor() {
   background: #e8d9f5;
 }
 
-/* ========================================= */
-/* FORMULARIO                                */
-/* ========================================= */
-
 .modal-form {
   display: flex;
   flex-direction: column;
@@ -393,10 +311,6 @@ function guardarProveedor() {
   flex: 1;
   min-height: 0;
 }
-
-/* ========================================= */
-/* CUERPO CON DESPLAZAMIENTO                 */
-/* ========================================= */
 
 .modal-body {
   flex: 1;
@@ -408,7 +322,6 @@ function guardarProveedor() {
   padding: 26px 32px;
 }
 
-/* Barra de desplazamiento */
 .modal-body::-webkit-scrollbar {
   width: 7px;
 }
@@ -421,10 +334,6 @@ function guardarProveedor() {
   background: #c8b1df;
   border-radius: 10px;
 }
-
-/* ========================================= */
-/* DISTRIBUCIÓN DE CAMPOS                    */
-/* ========================================= */
 
 .form-grid {
   display: grid;
@@ -449,10 +358,6 @@ function guardarProveedor() {
   font-size: 13px;
   font-weight: 700;
 }
-
-/* ========================================= */
-/* CAMPOS DE ENTRADA                         */
-/* ========================================= */
 
 .form-group input,
 .form-group textarea,
@@ -491,10 +396,6 @@ function guardarProveedor() {
   resize: vertical;
 }
 
-/* ========================================= */
-/* BOTONES INFERIORES FIJOS                  */
-/* ========================================= */
-
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -524,7 +425,6 @@ function guardarProveedor() {
   transition: background 0.2s;
 }
 
-/* Cancelar */
 .btn-cancel {
   border: 1px solid #e5d9f0;
   background: #ffffff;
@@ -535,7 +435,6 @@ function guardarProveedor() {
   background: #f8f5fc;
 }
 
-/* Guardar */
 .btn-save {
   border: none;
   background: #7950ae;
@@ -546,12 +445,7 @@ function guardarProveedor() {
   background: #633e96;
 }
 
-/* ========================================= */
-/* PANTALLAS PEQUEÑAS                        */
-/* ========================================= */
-
 @media (max-width: 600px) {
-
   .modal-overlay {
     padding: 12px;
   }
@@ -586,5 +480,4 @@ function guardarProveedor() {
     width: 100%;
   }
 }
-
 </style>

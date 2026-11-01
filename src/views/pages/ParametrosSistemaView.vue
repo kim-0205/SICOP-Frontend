@@ -3,7 +3,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { apiGet, apiPost, apiPut } from '@/services/api'
 
-// Datos que devuelve el backend.
 interface ParametroSistema {
   parametroSistemaId: number
   clave: string
@@ -11,7 +10,6 @@ interface ParametroSistema {
   descripcion: string | null
 }
 
-// Datos que enviamos al crear o editar.
 interface ParametroFormulario {
   clave: string
   valor: string
@@ -34,7 +32,6 @@ const formulario = ref({
   descripcion: '',
 })
 
-// Filtra los registros por clave, valor o descripción.
 const parametrosFiltrados = computed(() => {
   const texto = busqueda.value.trim().toLowerCase()
 
@@ -44,7 +41,6 @@ const parametrosFiltrados = computed(() => {
   )
 })
 
-// Consulta los parámetros existentes en SQL Server.
 async function cargarParametros() {
   cargando.value = true
   error.value = ''
@@ -60,7 +56,6 @@ async function cargarParametros() {
   }
 }
 
-// Abre el formulario para crear un registro.
 function nuevoParametro() {
   editandoId.value = null
   formulario.value = { clave: '', valor: '', descripcion: '' }
@@ -69,7 +64,6 @@ function nuevoParametro() {
   mostrarFormulario.value = true
 }
 
-// Abre el formulario con los datos existentes.
 function editarParametro(parametro: ParametroSistema) {
   editandoId.value = parametro.parametroSistemaId
 
@@ -89,7 +83,6 @@ function cerrarFormulario() {
   mostrarFormulario.value = false
 }
 
-// Registra o actualiza un parámetro.
 async function guardarParametro() {
   error.value = ''
   mensaje.value = ''
@@ -218,7 +211,6 @@ onMounted(cargarParametros)
       </div>
     </section>
 
-    <!-- Formulario para crear o editar -->
     <div
       v-if="mostrarFormulario"
       class="modal-overlay"
