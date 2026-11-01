@@ -2,6 +2,10 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 
+// =============================================
+// ESTRUCTURA DE LA FACTURA
+// =============================================
+
 interface FacturaFormulario {
   facturaCompraId?: number
   proveedorId: number
@@ -12,10 +16,15 @@ interface FacturaFormulario {
   observaciones: string
 }
 
+// Estructura de los proveedores disponibles.
 interface ProveedorOpcion {
   proveedorId: number
   nombre: string
 }
+
+// =============================================
+// PROPIEDADES RECIBIDAS DESDE FACTURASVIEW
+// =============================================
 
 const props = defineProps<{
   visible: boolean
@@ -23,10 +32,15 @@ const props = defineProps<{
   proveedores: ProveedorOpcion[]
 }>()
 
+// Eventos para comunicarnos con la vista principal.
 const emit = defineEmits<{
   cerrar: []
   guardar: [factura: FacturaFormulario]
 }>()
+
+// =============================================
+// DATOS DEL FORMULARIO
+// =============================================
 
 const formulario = reactive<FacturaFormulario>({
   proveedorId: 0,
@@ -37,6 +51,12 @@ const formulario = reactive<FacturaFormulario>({
   observaciones: ''
 })
 
+// =============================================
+// PREPARAR EL FORMULARIO
+// =============================================
+
+// Si editamos, cargamos los datos existentes.
+// Si registramos, limpiamos todos los campos.
 watch(
   () => [props.visible, props.factura] as const,
   () => {
@@ -66,17 +86,25 @@ watch(
   { immediate: true }
 )
 
+// =============================================
+// VALIDAR Y GUARDAR
+// =============================================
+
 function guardarFactura() {
+  // Verificar que se haya seleccionado un proveedor.
   if (formulario.proveedorId <= 0) {
     alert('Debe seleccionar un proveedor.')
     return
   }
 
+  // Verificar que el monto sea mayor que cero.
   if (formulario.total <= 0) {
     alert('El monto total debe ser mayor que cero.')
     return
   }
 
+  // Verificar que el vencimiento no sea anterior
+  // a la fecha de emisión.
   if (
     formulario.fechaVencimiento <
     formulario.fechaEmision
@@ -87,6 +115,8 @@ function guardarFactura() {
     return
   }
 
+  // Enviar una copia de los datos a FacturasView.
+  // No se realiza ninguna petición al backend.
   emit('guardar', { ...formulario })
 }
 </script>
@@ -103,6 +133,11 @@ function guardarFactura() {
       aria-modal="true"
       aria-labelledby="factura-modal-titulo"
     >
+
+      <!-- ====================================== -->
+      <!-- ENCABEZADO FIJO                       -->
+      <!-- ====================================== -->
+
       <header class="modal-header">
         <div>
           <span class="modal-label">
@@ -132,12 +167,18 @@ function guardarFactura() {
         </button>
       </header>
 
+      <!-- ====================================== -->
+      <!-- FORMULARIO                           -->
+      <!-- ====================================== -->
+
       <form
         class="modal-form"
         @submit.prevent="guardarFactura"
       >
         <div class="modal-body">
           <div class="form-grid">
+
+            <!-- Seleccionar proveedor -->
             <div class="form-group full-width">
               <label for="factura-proveedor">
                 Proveedor *
@@ -162,6 +203,7 @@ function guardarFactura() {
               </select>
             </div>
 
+            <!-- Número de factura -->
             <div class="form-group full-width">
               <label for="factura-numero">
                 Número de factura *
@@ -177,6 +219,7 @@ function guardarFactura() {
               />
             </div>
 
+            <!-- Fecha de emisión -->
             <div class="form-group">
               <label for="factura-emision">
                 Fecha de emisión *
@@ -190,6 +233,7 @@ function guardarFactura() {
               />
             </div>
 
+            <!-- Fecha de vencimiento -->
             <div class="form-group">
               <label for="factura-vencimiento">
                 Fecha de vencimiento *
@@ -204,6 +248,7 @@ function guardarFactura() {
               />
             </div>
 
+            <!-- Monto total -->
             <div class="form-group full-width">
               <label for="factura-total">
                 Monto total (Q) *
@@ -220,6 +265,7 @@ function guardarFactura() {
               />
             </div>
 
+            <!-- Observaciones -->
             <div class="form-group full-width">
               <label for="factura-observaciones">
                 Observaciones
@@ -232,8 +278,13 @@ function guardarFactura() {
                 placeholder="Descripción o detalles de la compra"
               ></textarea>
             </div>
+
           </div>
         </div>
+
+        <!-- ====================================== -->
+        <!-- BOTONES FIJOS                         -->
+        <!-- ====================================== -->
 
         <footer class="modal-footer">
           <button
@@ -255,12 +306,17 @@ function guardarFactura() {
             }}
           </button>
         </footer>
+
       </form>
     </section>
   </div>
 </template>
 
 <style scoped>
+/* ========================================= */
+/* FONDO DEL MODAL                           */
+/* ========================================= */
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -275,6 +331,10 @@ function guardarFactura() {
   background: rgba(35, 20, 59, 0.55);
   backdrop-filter: blur(5px);
 }
+
+/* ========================================= */
+/* VENTANA PRINCIPAL                         */
+/* ========================================= */
 
 .modal-card {
   display: flex;
@@ -295,6 +355,10 @@ function guardarFactura() {
 
   font-family: Arial, sans-serif;
 }
+
+/* ========================================= */
+/* ENCABEZADO FIJO                           */
+/* ========================================= */
 
 .modal-header {
   display: flex;
@@ -352,6 +416,10 @@ function guardarFactura() {
   background: #e8d9f5;
 }
 
+/* ========================================= */
+/* FORMULARIO                                */
+/* ========================================= */
+
 .modal-form {
   display: flex;
   flex-direction: column;
@@ -359,6 +427,7 @@ function guardarFactura() {
   min-height: 0;
 }
 
+/* Campos con desplazamiento independiente */
 .modal-body {
   flex: 1;
   min-height: 0;
@@ -369,6 +438,7 @@ function guardarFactura() {
   padding: 26px 32px;
 }
 
+/* Barra de desplazamiento */
 .modal-body::-webkit-scrollbar {
   width: 7px;
 }
@@ -377,6 +447,10 @@ function guardarFactura() {
   background: #c8b1df;
   border-radius: 10px;
 }
+
+/* ========================================= */
+/* DISTRIBUCIÓN DE CAMPOS                    */
+/* ========================================= */
 
 .form-grid {
   display: grid;
@@ -400,6 +474,10 @@ function guardarFactura() {
   font-size: 13px;
   font-weight: 700;
 }
+
+/* ========================================= */
+/* CAMPOS DE ENTRADA                         */
+/* ========================================= */
 
 .form-group input,
 .form-group select,
@@ -435,6 +513,10 @@ function guardarFactura() {
 .form-group textarea {
   resize: vertical;
 }
+
+/* ========================================= */
+/* BOTONES INFERIORES                        */
+/* ========================================= */
 
 .modal-footer {
   display: flex;
@@ -479,6 +561,10 @@ function guardarFactura() {
 .btn-save:hover {
   background: #633e96;
 }
+
+/* ========================================= */
+/* DISEÑO RESPONSIVO                         */
+/* ========================================= */
 
 @media (max-width: 600px) {
   .modal-overlay {

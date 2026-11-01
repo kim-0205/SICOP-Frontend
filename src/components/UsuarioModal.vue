@@ -2,6 +2,11 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 
+// =============================================
+// TIPOS DE DATOS
+// =============================================
+
+// Los identificadores de los roles vendrán del backend.
 interface RolOpcion {
   rolId: number
   nombre: string
@@ -15,19 +20,31 @@ interface UsuarioFormulario {
   activo: boolean
 }
 
+// =============================================
+// PROPIEDADES DEL COMPONENTE
+// =============================================
+
 const props = defineProps<{
   visible: boolean
   usuario: UsuarioFormulario | null
   roles: RolOpcion[]
 }>()
 
+// =============================================
+// EVENTOS
+// =============================================
+
 const emit = defineEmits<{
   cerrar: []
   guardar: [datos: UsuarioFormulario & {
-    password?: string
-    enviarCorreo?: boolean
-  }]
+  password?: string
+  enviarCorreo?: boolean
+}]
 }>()
+
+// =============================================
+// FORMULARIO
+// =============================================
 
 const formulario = reactive({
   usuarioId: undefined as number | undefined,
@@ -37,9 +54,11 @@ const formulario = reactive({
   confirmarPassword: '',
   rolId: 0,
   activo: true,
-  notificacion: 'ninguna' as 'ninguna' | 'correo'
+ notificacion: 'ninguna' as 'ninguna' | 'correo'
 })
 
+// Limpiar el formulario o cargar el usuario
+// seleccionado cuando se abre el modal.
 watch(
   () => [props.visible, props.usuario] as const,
   () => {
@@ -55,18 +74,24 @@ watch(
   { immediate: true }
 )
 
-function guardar() {
-  if (formulario.password) {
-    if (formulario.password.length < 8) {
-      alert('La contraseña debe tener al menos 8 caracteres.')
-      return
-    }
+// =============================================
+// GUARDAR USUARIO
+// =============================================
 
-    if (formulario.password !== formulario.confirmarPassword) {
-      alert('Las contraseñas no coinciden.')
-      return
+function guardar() {
+
+      // Validar la nueva contraseña cuando se proporciona.
+    if (formulario.password) {
+      if (formulario.password.length < 8) {
+        alert('La contraseña debe tener al menos 8 caracteres.')
+        return
+      }
+
+      if (formulario.password !== formulario.confirmarPassword) {
+        alert('Las contraseñas no coinciden.')
+        return
+      }
     }
-  }
 
   const nombre = formulario.nombre.trim()
   const correo = formulario.correo.trim()
@@ -93,6 +118,7 @@ function guardar() {
     return
   }
 
+  // La contraseña es obligatoria al crear.
   if (
     formulario.usuarioId === undefined &&
     !formulario.password.trim()
@@ -101,23 +127,26 @@ function guardar() {
     return
   }
 
-  const datos: UsuarioFormulario & {
-    password?: string
-    enviarCorreo?: boolean
-  } = {
-    usuarioId: formulario.usuarioId,
-    nombre,
-    correo,
-    rolId: formulario.rolId,
-    activo: formulario.activo,
-    enviarCorreo:
-      formulario.notificacion === 'correo' &&
-      (formulario.usuarioId === undefined || !!formulario.password)
-  }
+  // El cambio de contraseña se implementará
+  // con su propio endpoint del backend.
+  // Por eso no permitimos cambiarla al editar.
+   const datos: UsuarioFormulario & {
+          password?: string
+          enviarCorreo?: boolean} = {
+          usuarioId: formulario.usuarioId,
+          nombre,
+          correo,
+          rolId: formulario.rolId,
+          activo: formulario.activo,
+          enviarCorreo:
+            formulario.notificacion === 'correo' &&
+            (formulario.usuarioId === undefined || !!formulario.password)
+        }
 
-  if (formulario.password) {
-    datos.password = formulario.password
-  }
+  // Enviar la contraseña únicamente cuando se proporciona.
+    if (formulario.password) {
+      datos.password = formulario.password
+    }
 
   emit('guardar', datos)
 }
@@ -135,6 +164,7 @@ function cerrar() {
       aria-modal="true"
       aria-labelledby="titulo-usuario"
     >
+      <!-- Encabezado fijo -->
       <div class="modal-header">
         <div>
           <span class="modal-label">ADMINISTRACIÓN</span>
@@ -154,6 +184,7 @@ function cerrar() {
         </button>
       </div>
 
+      <!-- Contenido desplazable -->
       <form
         id="formulario-usuario"
         class="modal-body"
@@ -183,6 +214,7 @@ function cerrar() {
           />
         </div>
 
+        <!-- Nueva contraseña: obligatoria al crear, opcional al editar -->
         <div class="form-group">
           <label for="usuario-password">
             {{ usuario ? 'Nueva contraseña (opcional)' : 'Contraseña *' }}
@@ -207,6 +239,7 @@ function cerrar() {
           </small>
         </div>
 
+        <!-- Confirmación de contraseña -->
         <div class="form-group">
           <label for="usuario-confirmar-password">
             Confirmar contraseña
@@ -259,30 +292,31 @@ function cerrar() {
             cuando integremos la autenticación real.
           </small>
         </div>
+        <!-- Notificación de credenciales -->
+          <div
+            v-if="!usuario || formulario.password"
+            class="form-group"
+          >
+            <label>Notificación de credenciales</label>
 
-        <div
-          v-if="!usuario || formulario.password"
-          class="form-group"
-        >
-          <label>Notificación de credenciales</label>
+            <label class="checkbox-container">
+              <input
+                type="checkbox"
+                :checked="formulario.notificacion === 'correo'"
+                @change="formulario.notificacion =
+                  ($event.target as HTMLInputElement).checked ? 'correo' : 'ninguna'"
+              />
 
-          <label class="checkbox-container">
-            <input
-              type="checkbox"
-              :checked="formulario.notificacion === 'correo'"
-              @change="formulario.notificacion =
-                ($event.target as HTMLInputElement).checked ? 'correo' : 'ninguna'"
-            />
+              <span>Enviar usuario y contraseña por correo</span>
+            </label>
 
-            <span>Enviar usuario y contraseña por correo</span>
-          </label>
-
-          <small>
-            Se enviarán las credenciales al correo electrónico del usuario.
-          </small>
-        </div>
+            <small>
+              Se enviarán las credenciales al correo electrónico del usuario.
+            </small>
+          </div>
       </form>
 
+      <!-- Pie fijo -->
       <div class="modal-footer">
         <button
           type="button"

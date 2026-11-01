@@ -1,6 +1,6 @@
-
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
+// Servicios para registrar pagos en ASP.NET Core.
 import { apiPost, apiPut } from '@/services/api'
 
 import {
@@ -14,27 +14,50 @@ import {
   type PagoFormulario
 } from '../../stores/sicopStore'
 
+// Cargar información real al ingresar al módulo Pagos.
 onMounted(async () => {
   try {
+
+    // Primero cargar proveedores para identificar sus nombres.
     await cargarProveedoresFacturas()
+
+    // Consultar facturas y sus saldos reales.
     await cargarFacturas()
+
+    // Consultar el historial de pagos desde SQL Server.
     await cargarPagos()
+
   } catch (error) {
     console.error('Error al cargar pagos:', error)
     alert('No fue posible consultar los pagos desde el servidor.')
   }
 })
 
+// Pantalla de pagos conectada con ASP.NET Core y SQL Server.
 const busqueda = ref('')
 const mostrarModal = ref(false)
 const errorFormulario = ref('')
 
+// ==============================================
+// MODAL DE ANULACIÓN DE PAGOS
+// ==============================================
+
+// Controla la ventana de anulación.
 const mostrarModalAnulacion = ref(false)
+
+// Identifica el pago que se desea anular.
 const pagoSeleccionadoAnulacion = ref<number | null>(null)
+
+// Motivo obligatorio de la anulación.
 const motivoAnulacion = ref('')
+
+// Mensaje de error del formulario de anulación.
 const errorAnulacion = ref('')
+
+// Evita confirmar dos veces la misma operación.
 const anulandoPago = ref(false)
 
+// Abrir el modal de anulación.
 function abrirModalAnulacion(pagoId: number) {
   if (!esAdministradorGeneral.value) return
 
@@ -44,6 +67,7 @@ function abrirModalAnulacion(pagoId: number) {
   mostrarModalAnulacion.value = true
 }
 
+// Cerrar el modal sin anular.
 function cerrarModalAnulacion() {
   if (anulandoPago.value) return
 
@@ -53,6 +77,7 @@ function cerrarModalAnulacion() {
   errorAnulacion.value = ''
 }
 
+// Controlar el envío del formulario.
 const guardandoPago = ref(false)
 
 function formularioVacio(): PagoFormulario {
@@ -68,6 +93,7 @@ function formularioVacio(): PagoFormulario {
 
 const formulario = ref<PagoFormulario>(formularioVacio())
 
+// Solo pueden recibir pagos las facturas con saldo pendiente.
 const facturasPendientes = computed(() =>
   facturas.value.filter(
     factura =>
@@ -86,10 +112,12 @@ const saldoSeleccionado = computed(() =>
     : 0
 )
 
+// Total original de la factura seleccionada.
 const totalFacturaSeleccionada = computed(() =>
   Number(facturaSeleccionada.value?.total ?? 0)
 )
 
+// Cuánto se ha abonado a la factura.
 const totalAbonadoFactura = computed(() =>
   Math.max(
     0,
@@ -97,6 +125,7 @@ const totalAbonadoFactura = computed(() =>
   )
 )
 
+// Saldo que quedaría después del nuevo pago.
 const saldoDespuesPago = computed(() =>
   Math.max(
     0,
@@ -121,13 +150,22 @@ const pagosFiltrados = computed(() => {
     })
 })
 
+// =============================================
+// PAGINACIÓN DEL HISTORIAL DE PAGOS
+// =============================================
+
+// Cantidad de pagos que se mostrarán por página.
 const registrosPorPagina = 5
+
+// Página seleccionada actualmente.
 const paginaActual = ref(1)
 
+// Calcular cuántas páginas existen.
 const totalPaginas = computed(() =>
   Math.max(1, Math.ceil(pagosFiltrados.value.length / registrosPorPagina))
 )
 
+// Obtener únicamente los pagos correspondientes a la página actual.
 const pagosPaginados = computed(() => {
   const inicio = (paginaActual.value - 1) * registrosPorPagina
 
@@ -137,32 +175,36 @@ const pagosPaginados = computed(() => {
   )
 })
 
+// Permitir navegar entre páginas.
 function cambiarPagina(pagina: number) {
   if (pagina >= 1 && pagina <= totalPaginas.value) {
     paginaActual.value = pagina
   }
 }
 
+// Regresar a la primera página al realizar una búsqueda.
 watch(busqueda, () => {
   paginaActual.value = 1
 })
 
+// Evitar permanecer en una página que ya no existe.
 watch(totalPaginas, (total) => {
   if (paginaActual.value > total) {
     paginaActual.value = total
   }
 })
 
+// Sumar únicamente los pagos vigentes.
 const totalPagado = computed(() =>
   pagos.value
     .filter(pago => !pago.anulado)
     .reduce((suma, pago) => suma + pago.monto, 0)
 )
 
+// Contar los pagos vigentes.
 const totalAbonos = computed(() =>
   pagos.value.filter(pago => !pago.anulado).length
 )
-
 const facturasConSaldo = computed(() => facturasPendientes.value.length)
 
 function nombreFactura(id: number): string {
@@ -179,7 +221,10 @@ function abrirModal() {
   mostrarModal.value = true
 }
 
+// Cerrar el formulario únicamente cuando no se esté guardando.
 function cerrarModal() {
+
+  // Impedir cerrar durante el registro del pago.
   if (guardandoPago.value) return
 
   mostrarModal.value = false
@@ -192,14 +237,18 @@ function pagarSaldoCompleto() {
   }
 }
 
+// Registrar un pago real en SQL Server.
 async function guardarPago(): Promise<void> {
+
   errorFormulario.value = ''
 
   if (guardandoPago.value) return
 
-  guardandoPago.value = true
+    guardandoPago.value = true
 
   try {
+
+    // Obtener los datos del formulario.
     const datos = {
       facturaCompraId: Number(formulario.value.facturaCompraId),
       monto: Number(formulario.value.monto),
@@ -208,39 +257,51 @@ async function guardarPago(): Promise<void> {
       observaciones: formulario.value.observaciones.trim()
     }
 
+    // Validar que se haya seleccionado una factura.
     if (!datos.facturaCompraId) {
       throw new Error('Seleccione una factura válida.')
     }
 
+    // Validar el monto del pago.
     if (!Number.isFinite(datos.monto) || datos.monto <= 0) {
       throw new Error('El monto debe ser mayor que cero.')
     }
 
+    // Evitar registrar pagos superiores al saldo.
     if (datos.monto > saldoSeleccionado.value) {
       throw new Error(
         `El pago no puede superar el saldo pendiente de ${formatoMoneda(saldoSeleccionado.value)}.`
       )
     }
 
+    // Registrar el pago mediante ASP.NET Core.
     await apiPost('/api/Pagos', datos)
+
+    // Actualizar el historial de pagos desde SQL Server.
     await cargarPagos()
+
+    // Actualizar los saldos reales de las facturas.
     await cargarFacturas()
 
+    // Cerrar el formulario después de registrar correctamente.
     mostrarModal.value = false
     errorFormulario.value = ''
 
   } catch (error) {
+
     console.error('Error al registrar pago:', error)
 
     errorFormulario.value =
       error instanceof Error
         ? error.message
         : 'No fue posible registrar el pago.'
-  } finally {
-    guardandoPago.value = false
   }
+  finally {
+  guardandoPago.value = false
+}
 }
 
+// Verificar si el usuario tiene el rol de Administrador General.
 const esAdministradorGeneral = computed(() => {
   const usuario = sessionStorage.getItem('sicop_usuario')
 
@@ -248,13 +309,18 @@ const esAdministradorGeneral = computed(() => {
 
   try {
     const datosUsuario = JSON.parse(usuario)
+
+    // RolId 1 corresponde al Administrador General.
     return Number(datosUsuario.rolId) === 1
+
   } catch {
     return false
   }
 })
 
+// Anular un pago conservando su historial en SQL Server.
 async function anularPago(): Promise<void> {
+
   if (!esAdministradorGeneral.value || anulandoPago.value) return
 
   errorAnulacion.value = ''
@@ -264,6 +330,7 @@ async function anularPago(): Promise<void> {
 
   if (pagoId === null) return
 
+  // Validar el motivo obligatorio.
   if (!motivo || motivo.length > 500) {
     errorAnulacion.value = 'Ingrese un motivo válido de máximo 500 caracteres.'
     return
@@ -272,22 +339,28 @@ async function anularPago(): Promise<void> {
   anulandoPago.value = true
 
   try {
+
+    // Se conserva el endpoint y el formato del backend.
     await apiPut<void>(
       `/api/Pagos/${pagoId}/anular`,
       motivo
     )
 
+    // Actualizar pagos y saldos reales.
     await cargarPagos()
     await cargarFacturas()
 
+    // Cerrar la ventana al completar la operación.
     mostrarModalAnulacion.value = false
     pagoSeleccionadoAnulacion.value = null
     motivoAnulacion.value = ''
     errorAnulacion.value = ''
 
   } catch (error) {
+
     console.error('Error al anular el pago:', error)
     errorAnulacion.value = 'No fue posible anular el pago. Verifica los datos e inténtalo nuevamente.'
+
   } finally {
     anulandoPago.value = false
   }
@@ -370,27 +443,30 @@ async function anularPago(): Promise<void> {
                   {{ pago.anulado ? 'Anulado' : 'Vigente' }}
                 </span>
               </td>
-              <td
-                v-if="esAdministradorGeneral"
-                class="acciones-pago"
-              >
-                <button
-                  v-if="!pago.anulado"
-                  type="button"
-                  class="btn-secondary"
-                  @click="abrirModalAnulacion(pago.pagoId)"
-                >
-                  ✕ Anular
-                </button>
 
-                <span
-                  v-else
-                  class="pago-anulado-badge"
-                >
-                  <span aria-hidden="true">⊗</span>
-                  Anulado
-                </span>
-              </td>
+              <!-- Columna de acciones centrada -->
+            <td
+              v-if="esAdministradorGeneral"
+              class="acciones-pago"
+            >
+              <!-- Botón para anular pagos vigentes -->
+              <button
+                v-if="!pago.anulado"
+                type="button"
+                class="btn-secondary"
+                @click="abrirModalAnulacion(pago.pagoId)"
+              >
+                ✕ Anular
+              </button>
+
+              <!-- Etiqueta para pagos anulados -->
+              <span
+                v-else
+                class="pago-anulado-badge">
+                <span aria-hidden="true">⊗</span>
+                Anulado
+              </span>
+            </td>
             </tr>
             <tr v-if="pagosFiltrados.length === 0">
               <td :colspan="esAdministradorGeneral ? 10 : 9" class="empty-state">
@@ -402,45 +478,53 @@ async function anularPago(): Promise<void> {
           </tbody>
         </table>
       </div>
+      <!-- ====================================== -->
+<!-- PAGINACIÓN DEL HISTORIAL DE PAGOS      -->
+<!-- ====================================== -->
 
-      <div
-        v-if="pagosFiltrados.length > 0"
-        class="pagination-container"
-      >
-        <span class="pagination-info">
-          Mostrando
-          {{ (paginaActual - 1) * registrosPorPagina + 1 }}
-          -
-          {{ Math.min(paginaActual * registrosPorPagina, pagosFiltrados.length) }}
-          de {{ pagosFiltrados.length }} pagos
-        </span>
+<div
+  v-if="pagosFiltrados.length > 0"
+  class="pagination-container"
+>
+  <!-- Cantidad de registros mostrados -->
+  <span class="pagination-info">
+    Mostrando
+    {{ (paginaActual - 1) * registrosPorPagina + 1 }}
+    -
+    {{ Math.min(paginaActual * registrosPorPagina, pagosFiltrados.length) }}
+    de {{ pagosFiltrados.length }} pagos
+  </span>
 
-        <div class="pagination-buttons">
-          <button
-            type="button"
-            class="pagination-btn"
-            :disabled="paginaActual === 1"
-            @click="cambiarPagina(paginaActual - 1)"
-          >
-            ‹ Anterior
-          </button>
+  <!-- Botones para navegar -->
+  <div class="pagination-buttons">
 
-          <span class="pagination-current">
-            Página {{ paginaActual }} de {{ totalPaginas }}
-          </span>
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === 1"
+      @click="cambiarPagina(paginaActual - 1)"
+    >
+      ‹ Anterior
+    </button>
 
-          <button
-            type="button"
-            class="pagination-btn"
-            :disabled="paginaActual === totalPaginas"
-            @click="cambiarPagina(paginaActual + 1)"
-          >
-            Siguiente ›
-          </button>
-        </div>
-      </div>
+    <span class="pagination-current">
+      Página {{ paginaActual }} de {{ totalPaginas }}
+    </span>
+
+    <button
+      type="button"
+      class="pagination-btn"
+      :disabled="paginaActual === totalPaginas"
+      @click="cambiarPagina(paginaActual + 1)"
+    >
+      Siguiente ›
+    </button>
+
+  </div>
+</div>
     </section>
 
+    <!-- Formulario de registro. Se integra en esta vista para no alterar otros componentes. -->
     <div v-if="mostrarModal" class="modal-overlay" @click.self="cerrarModal">
       <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-pago">
         <header class="modal-header">
@@ -463,28 +547,29 @@ async function anularPago(): Promise<void> {
             </select>
           </div>
 
-          <div v-if="facturaSeleccionada" class="resumen-factura">
-            <h3>Resumen de la factura</h3>
+          <!-- Resumen financiero de la factura seleccionada -->
+<div v-if="facturaSeleccionada" class="resumen-factura">
+  <h3>Resumen de la factura</h3>
 
-            <div class="resumen-valores">
-              <div>
-                <span>Total de factura</span>
-                <strong>{{ formatoMoneda(totalFacturaSeleccionada) }}</strong>
-              </div>
+              <div class="resumen-valores">
+                <div>
+                  <span>Total de factura</span>
+                  <strong>{{ formatoMoneda(totalFacturaSeleccionada) }}</strong>
+                </div>
 
-              <div>
-                <span>Ya abonado</span>
-                <strong class="valor-abonado">
-                  {{ formatoMoneda(totalAbonadoFactura) }}
-                </strong>
-              </div>
+                <div>
+                  <span>Ya abonado</span>
+                  <strong class="valor-abonado">
+                    {{ formatoMoneda(totalAbonadoFactura) }}
+                  </strong>
+                </div>
 
-              <div>
-                <span>Saldo pendiente</span>
-                <strong>{{ formatoMoneda(saldoSeleccionado) }}</strong>
+                <div>
+                  <span>Saldo pendiente</span>
+                  <strong>{{ formatoMoneda(saldoSeleccionado) }}</strong>
+                </div>
               </div>
             </div>
-          </div>
 
           <div class="field-grid">
             <div class="field">
@@ -510,15 +595,14 @@ async function anularPago(): Promise<void> {
             </div>
             <input id="pago-monto" v-model.number="formulario.monto" type="number" min="0.01" step="0.01" :max="saldoSeleccionado || undefined" required />
           </div>
-
-          <div
-            v-if="facturaSeleccionada && Number(formulario.monto) > 0"
-            class="saldo-posterior"
-          >
-            <span>Saldo después del pago</span>
-            <strong>{{ formatoMoneda(saldoDespuesPago) }}</strong>
-          </div>
-
+            <!-- Vista previa del saldo después de registrar el pago -->
+            <div
+              v-if="facturaSeleccionada && Number(formulario.monto) > 0"
+              class="saldo-posterior"
+            >
+              <span>Saldo después del pago</span>
+              <strong>{{ formatoMoneda(saldoDespuesPago) }}</strong>
+            </div>
           <div class="field">
             <label for="pago-referencia">Número de referencia</label>
             <input id="pago-referencia" v-model="formulario.referencia" type="text" maxlength="100" placeholder="Ej. TRF-003" />
@@ -535,84 +619,86 @@ async function anularPago(): Promise<void> {
         <footer class="modal-footer">
           <button type="button" class="btn-secondary" @click="cerrarModal">Cancelar</button>
           <button
-            type="submit"
-            form="formulario-pago"
-            class="btn-primary"
-            :disabled="guardandoPago"
-          >
-            {{ guardandoPago ? 'Guardando...' : 'Guardar pago' }}
+              type="submit"
+              form="formulario-pago"
+              class="btn-primary"
+              :disabled="guardandoPago">
+              {{ guardandoPago ? 'Guardando...' : 'Guardar pago' }}
           </button>
         </footer>
       </section>
     </div>
+    <!-- ============================================== -->
+<!-- MODAL PERSONALIZADO PARA ANULAR PAGOS           -->
+<!-- ============================================== -->
 
-    <div
-      v-if="mostrarModalAnulacion"
-      class="modal-overlay"
-      @click.self="cerrarModalAnulacion"
-    >
-      <section
-        class="modal-anulacion-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="titulo-anulacion-pago"
+<div
+  v-if="mostrarModalAnulacion"
+  class="modal-overlay"
+  @click.self="cerrarModalAnulacion"
+>
+  <section
+    class="modal-anulacion-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="titulo-anulacion-pago"
+  >
+    <div class="modal-anulacion-icon">!</div>
+
+    <h2 id="titulo-anulacion-pago">Anular pago</h2>
+
+    <p class="modal-anulacion-description">
+      ¿Deseas anular el pago
+      <strong>#{{ pagoSeleccionadoAnulacion }}</strong>?
+    </p>
+
+    <p class="modal-anulacion-note">
+      El pago permanecerá en el historial y el saldo
+      pendiente de la factura se actualizará.
+    </p>
+
+    <form id="form-anulacion-pago" @submit.prevent="anularPago">
+      <div class="field">
+        <label for="motivo-anulacion-pago">
+          Motivo de anulación *
+        </label>
+
+        <textarea
+          id="motivo-anulacion-pago"
+          v-model="motivoAnulacion"
+          rows="3"
+          maxlength="500"
+          required
+          placeholder="Escribe el motivo de la anulación..."
+        ></textarea>
+      </div>
+
+      <p v-if="errorAnulacion" class="error-message" role="alert">
+        {{ errorAnulacion }}
+      </p>
+    </form>
+
+    <div class="modal-anulacion-actions">
+      <button
+        type="button"
+        class="btn-secondary"
+        :disabled="anulandoPago"
+        @click="cerrarModalAnulacion"
       >
-        <div class="modal-anulacion-icon">!</div>
+        Cancelar
+      </button>
 
-        <h2 id="titulo-anulacion-pago">Anular pago</h2>
-
-        <p class="modal-anulacion-description">
-          ¿Deseas anular el pago
-          <strong>#{{ pagoSeleccionadoAnulacion }}</strong>?
-        </p>
-
-        <p class="modal-anulacion-note">
-          El pago permanecerá en el historial y el saldo
-          pendiente de la factura se actualizará.
-        </p>
-
-        <form id="form-anulacion-pago" @submit.prevent="anularPago">
-          <div class="field">
-            <label for="motivo-anulacion-pago">
-              Motivo de anulación *
-            </label>
-
-            <textarea
-              id="motivo-anulacion-pago"
-              v-model="motivoAnulacion"
-              rows="3"
-              maxlength="500"
-              required
-              placeholder="Escribe el motivo de la anulación..."
-            ></textarea>
-          </div>
-
-          <p v-if="errorAnulacion" class="error-message" role="alert">
-            {{ errorAnulacion }}
-          </p>
-        </form>
-
-        <div class="modal-anulacion-actions">
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="anulandoPago"
-            @click="cerrarModalAnulacion"
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="submit"
-            form="form-anulacion-pago"
-            class="btn-primary"
-            :disabled="anulandoPago"
-          >
-            {{ anulandoPago ? 'Anulando...' : 'Confirmar anulación' }}
-          </button>
-        </div>
-      </section>
+      <button
+        type="submit"
+        form="form-anulacion-pago"
+        class="btn-primary"
+        :disabled="anulandoPago"
+      >
+        {{ anulandoPago ? 'Anulando...' : 'Confirmar anulación' }}
+      </button>
     </div>
+  </section>
+</div>
   </main>
 </template>
 
@@ -674,6 +760,9 @@ td { padding: 19px 18px; border-bottom: 1px solid #f0eaf6; color: #716080; font-
 @media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 768px) { .pagos-page { padding: 20px; } .page-header, .table-header { flex-direction: column; align-items: flex-start; } .page-header h1 { font-size: 26px; } .page-header .btn-primary { width: 100%; } .table-card { padding: 18px; } .modal-header, .modal-body, .modal-footer { padding-left: 20px; padding-right: 20px; } }
 @media (max-width: 480px) { .summary-grid, .field-grid { grid-template-columns: 1fr; } .modal-footer { flex-direction: column-reverse; } .modal-footer button { width: 100%; } .saldo-box { align-items: flex-start; flex-direction: column; } }
+/* ==============================================
+   MODAL DE ANULACIÓN DE PAGOS
+   ============================================== */
 
 .modal-anulacion-card {
   width: min(100%, 440px);
@@ -756,24 +845,37 @@ td { padding: 19px 18px; border-bottom: 1px solid #f0eaf6; color: #716080; font-
   }
 }
 
+/* ============================================
+   COLUMNA ACCIONES - PAGOS
+============================================ */
+
+/* Centrar el encabezado y los elementos */
 table th:last-child,
 table td.acciones-pago {
   text-align: center;
 }
 
+/* Etiqueta para pagos anulados */
 .pago-anulado-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+
   padding: 8px 12px;
   border-radius: 9px;
+
   background: #fce8eb;
   color: #b44960;
+
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* ============================================
+   RESUMEN FINANCIERO DE LA FACTURA
+============================================ */
 
 .resumen-factura {
   padding: 17px;
@@ -817,6 +919,8 @@ table td.acciones-pago {
   color: #247a43;
 }
 
+/* Saldo estimado después del abono */
+
 .saldo-posterior {
   display: flex;
   align-items: center;
@@ -848,6 +952,9 @@ table td.acciones-pago {
     flex-direction: column;
   }
 }
+/* =========================================
+   PAGINACIÓN DEL HISTORIAL DE PAGOS
+   ========================================= */
 
 .pagination-container {
   display: flex;

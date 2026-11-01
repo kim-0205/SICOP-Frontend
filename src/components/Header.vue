@@ -3,9 +3,11 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+// Obtenemos la ruta actual y el router del sistema.
 const route = useRoute()
 const router = useRouter()
 
+// Estructura de los datos del usuario autenticado.
 interface UsuarioSesion {
   usuarioId: number
   nombre: string
@@ -13,6 +15,7 @@ interface UsuarioSesion {
   rolId: number
 }
 
+// Recupera los datos guardados durante el login.
 const usuarioSesion = computed<UsuarioSesion | null>(() => {
   const datos = sessionStorage.getItem('sicop_usuario')
 
@@ -25,10 +28,12 @@ const usuarioSesion = computed<UsuarioSesion | null>(() => {
   }
 })
 
+// Obtiene la inicial del usuario.
 const inicialUsuario = computed(() =>
   usuarioSesion.value?.nombre?.charAt(0).toUpperCase() || 'S'
 )
 
+// Identificamos la sección en la que estamos.
 const titulo = computed(() => {
   const titulos: Record<string, string> = {
     dashboard: 'Panel principal',
@@ -42,6 +47,7 @@ const titulo = computed(() => {
   return titulos[String(route.name)] ?? 'SICOP'
 })
 
+// Fecha actual del sistema.
 const fechaActual = computed(() =>
   new Intl.DateTimeFormat('es-GT', {
     day: 'numeric',
@@ -50,17 +56,23 @@ const fechaActual = computed(() =>
   }).format(new Date()),
 )
 
+// Cierra la sesión del usuario autenticado.
 async function cerrarSesion() {
+  // Elimina el token JWT.
   sessionStorage.removeItem('sicop_token')
 
+  // Elimina los datos del usuario.
   sessionStorage.removeItem('sicop_usuario')
 
+  // Regresa a la pantalla de inicio de sesión.
   await router.replace('/login')
 }
 </script>
 
 <template>
   <header class="topbar">
+
+    <!-- Información de la sección -->
     <div class="topbar-left">
       <div class="topbar-icon">✦</div>
 
@@ -73,6 +85,7 @@ async function cerrarSesion() {
       </div>
     </div>
 
+    <!-- Información de la sesión -->
     <div class="topbar-right">
       <span class="topbar-date">
         {{ fechaActual }}
@@ -80,6 +93,7 @@ async function cerrarSesion() {
 
       <div class="topbar-divider"></div>
 
+      <!-- Usuario autenticado -->
       <div class="topbar-user">
         <div class="user-avatar">{{ inicialUsuario }}</div>
 
@@ -89,6 +103,7 @@ async function cerrarSesion() {
         </div>
       </div>
 
+      <!-- Botón de cerrar sesión -->
       <button
         type="button"
         class="logout-button"
@@ -96,6 +111,7 @@ async function cerrarSesion() {
         aria-label="Cerrar sesión"
         @click="cerrarSesion"
       >
+        <!-- Símbolo de encendido -->
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="25"
@@ -113,6 +129,7 @@ async function cerrarSesion() {
         </svg>
       </button>
     </div>
+
   </header>
 </template>
 
@@ -211,6 +228,7 @@ h2 {
   color: #9a87ae;
 }
 
+/* Botón morado para cerrar sesión */
 .logout-button {
   width: 44px;
   height: 44px;
@@ -225,12 +243,14 @@ h2 {
   transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 
+/* Efecto al pasar el cursor */
 .logout-button:hover {
   background: #7551a7;
   color: #ffffff;
   transform: translateY(-1px);
 }
 
+/* Accesibilidad mediante teclado */
 .logout-button:focus-visible {
   outline: 3px solid #b79ad9;
   outline-offset: 3px;
